@@ -7,3 +7,11 @@ background_color = #25f4d4
 
 
 [graphic]
+
+
+[graphic]
+type = spectrogram
+background_color = 11111A
+shape = line
+style = lines
+position = full

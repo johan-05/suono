@@ -1,25 +1,24 @@
 use crate::config::*;
-
 use crate::graphics::Component;
 use crate::graphics::Spectrogram;
 use crate::graphics::Timeline;
 use crate::graphics::Waveform;
-const FLAG_WINDOW_RESIZABLE: u32 = 4; // source: trust me bro!
-use ffi::rlSetLineWidth;
+
 use ffi::SetConfigFlags;
 use raylib::prelude::*;
+const FLAG_WINDOW_RESIZABLE: u32 = 4; // source: trust me bro!
+
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{DeviceId, Stream, StreamConfig};
 
 use std::f32::consts::{E, PI};
-
-extern crate libpulse_binding as pulse;
-extern crate libpulse_simple_binding as psimple;
-use psimple::Simple;
-use pulse::sample::{Format, Spec};
-use pulse::stream::Direction;
+use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
 
 #[allow(dead_code)]
+#[allow(unused_variables)]
+
 pub struct Suono {
     //config
     pub sample_count: usize,
@@ -32,50 +31,47 @@ pub struct Suono {
     window_height: i32,
     window_width: i32,
     target_frequencies: Vec<f32>,
-    raw_audio_buffer: [u8; 3200],
-    decoded_audio_buffer: Vec<(f32, f32)>,
-    audio_history: [i32; 800],
+    //raw_audio_buffer: [u8; 3200],
+    decoded_audio_buffer: [f32; 2048],
+    audio_history: [i32; 400],
     fft_results: Vec<f32>,
     //raylib stuff
     pub rl: RaylibHandle,
     thread: RaylibThread,
-    rl_audio: RaylibAudio,
-    //PulseAudio stuff
-    pub pa_stream: Simple,
-    audio_format: Spec,
+    //rl_audio: RaylibAudio,
+    //Pipewire stuff
+    pub audio_stream: Stream,
+    audio_data_arc: Arc<Mutex<[f32; 2048]>>,
 }
 
 #[allow(dead_code)]
 impl Suono {
     pub fn init(config: Config) -> Self {
         let (rl, thread) = raylib::init()
-            .size(1280, 720)
+            .size(1279, 720)
             .title("Trap Nation ripoff™")
             .build();
 
-        let rl_audio = RaylibAudio::init_audio_device().expect("failed to initialize audio");
+        //let rl_audio = RaylibAudio::init_audio_device().expect("audio init failed");
 
-        let (pa_stream, audio_format) = pa_init();
+        let audio_data_arc = Arc::new(Mutex::new([0.0; 2048]));
+        let audio_stream = pipewire_init(audio_data_arc.clone());
+        audio_stream.play().expect("could not play stream");
 
         let window_width = rl.get_screen_width();
         let window_height = rl.get_screen_height();
-
-        let line_width = 0.60 * window_width as f32 / config.sample_count as f32;
-        unsafe { rlSetLineWidth(line_width) };
 
         unsafe { SetConfigFlags(FLAG_WINDOW_RESIZABLE) };
 
         let graphic_elements = Suono::create_graphic_elements(config.graphics);
 
-        let target_frequencies = (0..config.sample_count)
-            .map(|i| 20.0 * E.powf(6.3 * i as f32 / config.sample_count as f32))
-            .collect::<Vec<f32>>();
+        let target_frequencies = create_target_frequenzies(config.sample_count);
 
-        let raw_audio_buffer = [0; 3200];
-        let audio_history = [0; 800];
-        let decoded_audio_buffer: Vec<(f32, f32)> = Vec::new();
+        let audio_history = [0; 400];
+        let decoded_audio_buffer = [0.0; 2048];
 
         let fft_results = vec![0.0; config.sample_count];
+
         return Suono {
             sample_count: config.sample_count,
             sample_interpolation_scalar: config.sample_interpolation_scalar,
@@ -85,58 +81,90 @@ impl Suono {
             window_width,
             window_height,
             target_frequencies,
-            raw_audio_buffer,
             decoded_audio_buffer,
             audio_history,
             fft_results,
             rl,
             thread,
-            rl_audio,
-            pa_stream,
-            audio_format,
+            //rl_audio,
+            audio_stream,
+            audio_data_arc,
         };
     }
 
     pub fn update_screen_dimensions(&mut self) {
         let new_width = self.rl.get_screen_width();
         let new_height = self.rl.get_screen_height();
+        //println!("{}, {}", &new_width, &new_height);
         if new_width != self.window_width || new_height != self.window_height {
-            println!("changed");
+            println!("changed height {new_height}, width {new_width}");
             self.window_width = new_width;
             self.window_height = new_height;
             self.graphic_elements
                 .iter_mut()
-                .for_each(|g| g.update(new_width, new_width));
-
-            let line_width = 0.60 * new_width as f32 / self.sample_count as f32;
-            unsafe { rlSetLineWidth(line_width) };
+                .for_each(|g| g.update(new_width, new_height, self.sample_count));
         }
     }
 
-    pub fn update_audio_data(&mut self) {
-        self.pa_stream.read(&mut self.raw_audio_buffer).unwrap();
-        self.decoded_audio_buffer = self
-            .raw_audio_buffer
-            .chunks(2)
-            .enumerate()
-            .map(|(i, b)| {
-                (i as f32 / 44100.0, unsafe {
-                    *(&b[0] as *const u8 as *const i16) as f32
-                })
+    /*pub fn update_audio_data(&mut self) {
+    self.pa_stream.read(&mut self.raw_audio_buffer).unwrap();
+    println!("passed");
+    self.decoded_audio_buffer = self
+        .raw_audio_buffer
+        .chunks(2)
+        .enumerate()
+        .map(|(i, b)| {
+            (i as f32 / 44100.0, unsafe {
+                *(&b[0] as *const u8 as *const i16) as f32
             })
-            .collect::<Vec<(f32, f32)>>();
+        })
+        .collect::<Vec<(f32, f32)>>();
 
+    self.decoded_audio_buffer
+        .chunks(100)
+        .map(|c| c.iter().map(|s| f32::abs(s.1)).sum::<f32>())
+        .map(|n| n / 4000.0)
+        .for_each(|n| {
+            let index = self.audio_history.iter().position(|i| *i == 0).unwrap_or(0);
+            if index != 799 {
+                self.audio_history[index] = n as i32;
+                self.audio_history[index + 1] = 0;
+            } else {
+                self.audio_history[index] = n as i32;
+                self.audio_history[0] = 0;
+            }
+        });
+
+    let res = fft_custom(
+        self.decoded_audio_buffer.as_slice(),
+        &self.target_frequencies,
+    );
+
+    for (i, f) in self.fft_results.iter_mut().enumerate() {
+        *f = res[i] + *f * self.sample_interpolation_scalar;
+    }
+    }*/
+
+    pub fn update_audio_data(&mut self) {
+        //println!("passed");
+
+        // self.decoded_audio_buffer
+        //   .copy_from_slice(Arc::make_mut(&mut self.audio_data_arc));
+
+        let m = self.audio_data_arc.lock().expect("could not lock");
+        self.decoded_audio_buffer.copy_from_slice(m.as_slice());
+
+        //homemade circular buffer that records volume as a function of time
         self.decoded_audio_buffer
-            .chunks(100)
-            .map(|c| c.iter().map(|s| f32::abs(s.1)).sum::<f32>())
-            .map(|n| n / 4000.0)
+            .chunks(350)
+            .map(|c| c.iter().map(|s| f32::abs(*s)).sum::<f32>())
             .for_each(|n| {
                 let index = self.audio_history.iter().position(|i| *i == 0).unwrap_or(0);
-                if index != 799 {
-                    self.audio_history[index] = n as i32;
+                if index != self.audio_history.len() - 1 {
+                    self.audio_history[index] = 5 * n as i32;
                     self.audio_history[index + 1] = 0;
                 } else {
-                    self.audio_history[index] = n as i32;
+                    self.audio_history[index] = 5 * n as i32;
                     self.audio_history[0] = 0;
                 }
             });
@@ -145,6 +173,8 @@ impl Suono {
             self.decoded_audio_buffer.as_slice(),
             &self.target_frequencies,
         );
+
+        // println!("{:?}", res);
 
         for (i, f) in self.fft_results.iter_mut().enumerate() {
             *f = res[i] + *f * self.sample_interpolation_scalar;
@@ -171,46 +201,61 @@ impl Suono {
                 &mut d,
                 &self.fft_results,
                 self.sample_count,
-                &self.decoded_audio_buffer,
+                &self.decoded_audio_buffer.as_slice(),
                 self.audio_history,
             );
         }
     }
 }
 
-pub fn pa_init() -> (Simple, Spec) {
-    let spec = Spec {
-        format: Format::S16NE,
-        channels: 1,
-        rate: 44100,
+fn pipewire_init(mut audio_data_arc: Arc<Mutex<[f32; 2048]>>) -> Stream {
+    let host = cpal::default_host();
+    let device = host
+        .device_by_id(&DeviceId::new(host.id(), "pipewire"))
+        .expect("pipewire not found");
+
+    let stream_config = StreamConfig {
+        channels: 2,
+        sample_rate: 44100,
+        buffer_size: cpal::BufferSize::Fixed(1024),
     };
 
-    let stream = Simple::new(
-        None,
-        "Suono",
-        Direction::Record,
-        //Some("alsa_output.pci-0000_03_00.6.HiFi__Headphones__sink.monitor"),
-        Some("alsa_output.pci-0000_03_00.6.HiFi__Speaker__sink.monitor"),
-        "Music",
-        &spec,
-        None,
-        None,
-    )
-    .expect("amogus");
+    let stream = device
+        .build_input_stream(
+            stream_config,
+            move |source_data: &[f32], _| {
+                let mut m = audio_data_arc.lock().expect("could not lock");
+                m.copy_from_slice(source_data);
+                // println!("{:?}", source_data[0..300].to_vec());
+            },
+            move |error| println!("Audio stream error {}", error),
+            Some(std::time::Duration::from_secs(5)),
+        )
+        .expect("failed to make de strim");
 
-    return (stream, spec);
+    let _com = std::process::Command::new("bash")
+        .arg("-c")
+        .arg("~/rust/suono/src/pw_redirect_sources.sh")
+        .output()
+        .unwrap();
+
+    return stream;
 }
 
-fn fft_custom(data: &[(f32, f32)], target_frequencies: &Vec<f32>) -> Vec<f32> {
+// RTFM https://en.wikipedia.org/wiki/Fast_Fourier_transform#FFT_algorithms_specialized_for_real_or_symmetric_data
+// pretty standard implementation with a bit of e^ix = cos(x) + i*sin(x) shenanigans
+fn fft_custom(data: &[f32], target_frequencies: &Vec<f32>) -> Vec<f32> {
     target_frequencies
         .par_iter()
         .map(|target_f| {
             let forier_data = data
                 .into_iter()
-                .map(|d| {
+                .enumerate()
+                .map(|(i, d)| {
+                    let t = i as f32 / 44100.0;
                     (
-                        d.1 * f32::sin(2.0 * PI * d.0 * target_f),
-                        d.1 * f32::cos(2.0 * PI * d.0 * target_f),
+                        d * f32::sin(2.0 * PI * t * target_f),
+                        d * f32::cos(2.0 * PI * t * target_f),
                     )
                 })
                 .fold((0.0, 0.0), |acc, d| (acc.0 + d.0, acc.1 + d.1));
@@ -220,8 +265,16 @@ fn fft_custom(data: &[(f32, f32)], target_frequencies: &Vec<f32>) -> Vec<f32> {
             );
             return f32::powf(
                 mass_center.0 * mass_center.0 + mass_center.1 * mass_center.1,
-                0.25,
-            );
+                0.15, // little bit of extra softening of high values + freq equalization
+            ) * f32::powf(*target_f, 0.17);
         })
+        .collect::<Vec<f32>>()
+}
+
+// return a Vec of length "sample_count" with number logarithmically destributed between 0 and 20*e^(6.3) witch is 10 891
+// for no other readon than that it looks good
+fn create_target_frequenzies(sample_count: usize) -> Vec<f32> {
+    (0..sample_count)
+        .map(|i| 16.0 * E.powf(5.8 * i as f32 / sample_count as f32))
         .collect::<Vec<f32>>()
 }

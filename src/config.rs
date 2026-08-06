@@ -1,6 +1,14 @@
 use dirs::config_dir;
-use raylib::prelude::*;
+use raylib::{
+    ffi::{CSSPalette, RaylibPalette},
+    prelude::*,
+};
 use std::fs;
+
+#[allow(dead_code)]
+#[allow(unused_variables)]
+
+const SQUARE_BRACKETS: [char; 2] = ['[', ']'];
 
 pub fn load_config_file() -> Config {
     let config_file_path = config_dir()
@@ -118,7 +126,7 @@ impl GraphicConfig {
                         a: 255,
                     },
                 ],
-                orientation: Oriantation::Horizintal,
+                orientation: Orientation::Horizintal,
                 blend: true,
                 glow: false,
             },
@@ -131,7 +139,7 @@ impl GraphicConfig {
 
         match parameter.as_str() {
             "background_color" => {
-                self.background_color = Color::from_hex(value).unwrap_or(Color::BLACK);
+                self.background_color = Color::from_hex(value).unwrap_or(Color::WHITE);
             }
             "position" => {
                 self.position = match value {
@@ -159,6 +167,7 @@ impl GraphicConfig {
                     "lines" => GraphicStyle::Lines,
                     "graph" => GraphicStyle::Graph,
                     "dots" => GraphicStyle::Dots,
+                    "dots_single" => GraphicStyle::DotsSingle,
                     _ => GraphicStyle::Lines,
                 }
             }
@@ -169,6 +178,22 @@ impl GraphicConfig {
                     "waveform" => GraphicType::Waveform,
                     _ => GraphicType::Timeline,
                 }
+            }
+            "color_scheme" => {
+                let values_trimmed = value.trim_matches(&SQUARE_BRACKETS);
+
+                let colors: Vec<Color> = values_trimmed
+                    .split(", ")
+                    .map(|color| Color::from_hex(color).unwrap_or(Color::TURQUOISE))
+                    .collect();
+
+                let color_scheme = ColorScheme {
+                    colors: colors,
+                    orientation: Orientation::Horizintal,
+                    blend: true,
+                    glow: false,
+                };
+                self.color_scheme = color_scheme;
             }
             _ => println!("Could not set parameter {} to value {}", parameter, value),
         }
@@ -206,10 +231,11 @@ pub enum GraphicStyle {
     Lines,
     Graph,
     Dots,
+    DotsSingle,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Oriantation {
+pub enum Orientation {
     Vertical,
     Horizintal,
     //Diagonal(u8), Proceed if you dare!
@@ -218,7 +244,7 @@ pub enum Oriantation {
 #[derive(Clone, Debug)]
 pub struct ColorScheme {
     pub colors: Vec<Color>,
-    pub orientation: Oriantation,
+    pub orientation: Orientation,
     pub blend: bool,
     pub glow: bool,
 }
