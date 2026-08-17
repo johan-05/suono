@@ -7,6 +7,6 @@ edition = "2021"
 cpal = "0.18.1"
 dirs = "5.0.1"
 puremp3 = "0.1.0"
-raylib = "6.0.0"
+raylib = {version = "6.0.0", features = ["SUPPORT_FILEFORMAT_JPG"]}
 rayon = "1.10.0"
 rustfft = "6.2.0"

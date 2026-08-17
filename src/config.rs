@@ -1,6 +1,6 @@
 use dirs::config_dir;
 use raylib::{
-    ffi::{CSSPalette, RaylibPalette},
+    ffi::{BlendMode::BLEND_ALPHA, CSSPalette, RaylibPalette},
     prelude::*,
 };
 use std::fs;
@@ -74,7 +74,10 @@ impl Config {
             "background_image" => {
                 self.background_image = match Image::load_image(value) {
                     Ok(image) => Some(image),
-                    Err(_) => None,
+                    Err(e) => {
+                        println!("failed to load image {}, error: {}", value, e);
+                        None
+                    }
                 };
             }
             _ => println!("Could not set parameter {} to value {}", parameter, value),
@@ -139,7 +142,11 @@ impl GraphicConfig {
 
         match parameter.as_str() {
             "background_color" => {
-                self.background_color = Color::from_hex(value).unwrap_or(Color::WHITE);
+                if value == "none" {
+                    self.background_color = Color::TRANSPARENT
+                } else {
+                    self.background_color = Color::from_hex(value).unwrap_or(Color::WHITE);
+                }
             }
             "position" => {
                 self.position = match value {
@@ -187,13 +194,21 @@ impl GraphicConfig {
                     .map(|color| Color::from_hex(color).unwrap_or(Color::TURQUOISE))
                     .collect();
 
-                let color_scheme = ColorScheme {
-                    colors: colors,
-                    orientation: Orientation::Horizintal,
-                    blend: true,
-                    glow: false,
-                };
-                self.color_scheme = color_scheme;
+                self.color_scheme.colors = colors;
+            }
+            "color_blend" => {
+                self.color_scheme.blend = match value {
+                    "true" => true,
+                    "false" => false,
+                    _ => false,
+                }
+            }
+            "color_glow" => {
+                self.color_scheme.glow = match value {
+                    "true" => true,
+                    "false" => false,
+                    _ => false,
+                }
             }
             _ => println!("Could not set parameter {} to value {}", parameter, value),
         }

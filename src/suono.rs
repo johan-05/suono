@@ -1,10 +1,11 @@
 use crate::config::*;
 use crate::graphics::Component;
-use crate::graphics::Spectrogram;
-use crate::graphics::Timeline;
-use crate::graphics::Waveform;
+use crate::spectrogram::Spectrogram;
+use crate::timeline::Timeline;
+use crate::waveform::Waveform;
 
 use ffi::SetConfigFlags;
+use raylib::ffi::Rectangle;
 use raylib::prelude::*;
 const FLAG_WINDOW_RESIZABLE: u32 = 4; // source: trust me bro!
 
@@ -24,22 +25,19 @@ pub struct Suono {
     pub sample_count: usize,
     pub sample_interpolation_scalar: f32,
     pub background_color: Color,
-    pub background_image: Option<Image>,
-    //pub graphics: Vec<GraphicElement>,
+    pub background_image: Option<Texture2D>,
     pub graphic_elements: Vec<Box<dyn Component>>,
     //state
     window_height: i32,
     window_width: i32,
     target_frequencies: Vec<f32>,
-    //raw_audio_buffer: [u8; 3200],
     decoded_audio_buffer: [f32; 2048],
     audio_history: [i32; 400],
     fft_results: Vec<f32>,
     //raylib stuff
     pub rl: RaylibHandle,
     thread: RaylibThread,
-    //rl_audio: RaylibAudio,
-    //Pipewire stuff
+    //pipewire stuff
     pub audio_stream: Stream,
     audio_data_arc: Arc<Mutex<[f32; 2048]>>,
 }
@@ -47,7 +45,7 @@ pub struct Suono {
 #[allow(dead_code)]
 impl Suono {
     pub fn init(config: Config) -> Self {
-        let (rl, thread) = raylib::init()
+        let (mut rl, thread) = raylib::init()
             .size(1279, 720)
             .title("Trap Nation ripoff™")
             .build();
@@ -63,6 +61,13 @@ impl Suono {
 
         unsafe { SetConfigFlags(FLAG_WINDOW_RESIZABLE) };
 
+        let mut background_image: Option<Texture2D> = None;
+        if let Some(background_image_file) = config.background_image {
+            background_image = rl
+                .load_texture_from_image(&thread, &background_image_file)
+                .ok();
+        }
+
         let graphic_elements = Suono::create_graphic_elements(config.graphics);
 
         let target_frequencies = create_target_frequenzies(config.sample_count);
@@ -76,7 +81,7 @@ impl Suono {
             sample_count: config.sample_count,
             sample_interpolation_scalar: config.sample_interpolation_scalar,
             background_color: config.background_color,
-            background_image: config.background_image,
+            background_image: background_image,
             graphic_elements,
             window_width,
             window_height,
@@ -106,51 +111,7 @@ impl Suono {
         }
     }
 
-    /*pub fn update_audio_data(&mut self) {
-    self.pa_stream.read(&mut self.raw_audio_buffer).unwrap();
-    println!("passed");
-    self.decoded_audio_buffer = self
-        .raw_audio_buffer
-        .chunks(2)
-        .enumerate()
-        .map(|(i, b)| {
-            (i as f32 / 44100.0, unsafe {
-                *(&b[0] as *const u8 as *const i16) as f32
-            })
-        })
-        .collect::<Vec<(f32, f32)>>();
-
-    self.decoded_audio_buffer
-        .chunks(100)
-        .map(|c| c.iter().map(|s| f32::abs(s.1)).sum::<f32>())
-        .map(|n| n / 4000.0)
-        .for_each(|n| {
-            let index = self.audio_history.iter().position(|i| *i == 0).unwrap_or(0);
-            if index != 799 {
-                self.audio_history[index] = n as i32;
-                self.audio_history[index + 1] = 0;
-            } else {
-                self.audio_history[index] = n as i32;
-                self.audio_history[0] = 0;
-            }
-        });
-
-    let res = fft_custom(
-        self.decoded_audio_buffer.as_slice(),
-        &self.target_frequencies,
-    );
-
-    for (i, f) in self.fft_results.iter_mut().enumerate() {
-        *f = res[i] + *f * self.sample_interpolation_scalar;
-    }
-    }*/
-
     pub fn update_audio_data(&mut self) {
-        //println!("passed");
-
-        // self.decoded_audio_buffer
-        //   .copy_from_slice(Arc::make_mut(&mut self.audio_data_arc));
-
         let m = self.audio_data_arc.lock().expect("could not lock");
         self.decoded_audio_buffer.copy_from_slice(m.as_slice());
 
@@ -196,6 +157,26 @@ impl Suono {
         let mut d = self.rl.begin_drawing(&self.thread);
         d.clear_background(self.background_color);
 
+        if let Some(background_image) = &self.background_image {
+            d.draw_texture_pro(
+                background_image,
+                Rectangle {
+                    x: 0.0,
+                    y: 0.0,
+                    width: background_image.width as f32,
+                    height: background_image.height as f32,
+                },
+                Rectangle {
+                    x: 0.0,
+                    y: 0.0,
+                    width: self.window_width as f32,
+                    height: self.window_height as f32,
+                },
+                Vector2 { x: 0.0, y: 0.0 },
+                0.0,
+                Color::WHITE,
+            )
+        }
         for graphic in &mut self.graphic_elements {
             graphic.render(
                 &mut d,
@@ -208,7 +189,7 @@ impl Suono {
     }
 }
 
-fn pipewire_init(mut audio_data_arc: Arc<Mutex<[f32; 2048]>>) -> Stream {
+fn pipewire_init(audio_data_arc: Arc<Mutex<[f32; 2048]>>) -> Stream {
     let host = cpal::default_host();
     let device = host
         .device_by_id(&DeviceId::new(host.id(), "pipewire"))
