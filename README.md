@@ -1,11 +1,12 @@
 <p align="center">
   <img
-    width="400"
-    src="https://github.com/johan-05/suono/assets/suono_logo.png"
-    alt="Starship – Cross-shell prompt"
+    width="900"
+    src="https://raw.githubusercontent.com/johan-05/suono/main/assets/suono_logo.png"
+    alt="Suono - Audio visualized"
   />
 </p>
-# Suono - A modern GPU-rendered audio vizualizer
+
+# Suono &nbsp; - &nbsp; A modern GPU-rendered audio vizualizer
 ## Installation
 Clone the repo:
 ```sh
@@ -18,10 +19,11 @@ cargo run --release
 ```
 
 ## configuration
-Configuration happens in `XDG_CONFIG_HOME/suono.conf`
+Configuration happens in `XDG_CONFIG_HOME/suono.conf`, usually located at `~/.config/suono.conf`
 
-The [default config-file](https://github.com/johan-05/suono/assets/defaul_config_file) is a great place to start. <br />
-The basic construction of the file is of one **`[global]´** section and up to four **`graphic`** sections
+The [config templates](https://github.com/johan-05/suono/assets) are a great place to take inspiration.
+
+The basic construction of the file is of one `[global]` section and up to four `[graphic]` sections
 
 ### Global
 Settings that affect all graphics
@@ -35,10 +37,32 @@ timeline_length = 800                          # Sets the amount of samples the 
 ```
 
 ### Graphics
-Suono supports rendering up to four graphics simultaneously. Each one is market with a **`[Graphic]`** annotation <br />and crutially a **`type`** field which makes it into a **`Spectrogram`**, a **`Waveform`** or a **`Timeline`**
+Suono supports rendering up to four graphics simultaneously. Each one is market with a **`[Graphic]`** annotation <br />and crutially a **`type`** field which makes it into a **`Spectrogram`**, a **`Waveform`** or a **`Timeline`** <br />
 A graphic-element can be configured with the following attributes:
 
 | Field     | Options                         |
 | ----------| ------------------------------- |
+| type      | `Spectrogram`, `Waveform` or `Timeline` |
+| position  | `full`, `left`, `right`, `top`, `bottom`, `topleft`,<br/> `topright`, `bottomleft` or `bottomright` |
+| background_color | `none` Background is same as window background <br/> `RRGGBB` Color in Hex format |
+| shape | `flat` (default) or `round` (only supported by spectrogram) |
+| style  | `lines`, `graph`, `dots`, `dots_single` |
+| color_scheme | `[RRGGBB, RRGGBB, RRGGBB]` |
+| color_blend | `true` or `false` |
+| color_glow | `true` or `false`  |
+
+Here is an example of what a graphics-element config could look like:
+```conf
+[graphic]
+type = spectrogram
+position = full
+background_color = none
+shape = flat
+style = lines
+color_scheme = [02A797, 865991, CB2080]
+color_blend = true
+```
+
+
 
 
