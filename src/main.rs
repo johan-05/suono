@@ -16,7 +16,8 @@ use suono::Suono;
 /*
 TODO:
     Background img              ✓
-    github + README.md          x
+    github + README.md          ✓
+    build.rs                    x
     color blending              ✓
     PW compatability            x
     optimizing+parallelizing    x

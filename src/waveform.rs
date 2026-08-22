@@ -162,16 +162,16 @@ impl Component for Waveform {
         );
 
         match (self.shape, self.style) {
-            (GraphicShape::Line, GraphicStyle::Lines) => {
+            (GraphicShape::Flat, GraphicStyle::Lines) => {
                 self.render_lines(d, decoded_audio);
             }
-            (GraphicShape::Line, GraphicStyle::Graph) => {
+            (GraphicShape::Flat, GraphicStyle::Graph) => {
                 self.render_graph(d, decoded_audio);
             }
-            (GraphicShape::Line, GraphicStyle::Dots) => {
+            (GraphicShape::Flat, GraphicStyle::Dots) => {
                 self.render_dots(d, decoded_audio);
             }
-            (GraphicShape::Line, GraphicStyle::DotsSingle) => {
+            (GraphicShape::Flat, GraphicStyle::DotsSingle) => {
                 self.render_dots_single(d, decoded_audio);
             }
             _ => {

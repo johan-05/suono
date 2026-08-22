@@ -1,17 +1,36 @@
-
-
-background_color = #25f4d4
-
-
-[graphic]
-
-
-[graphic]
-
+[global]
+background_color = 11111A                      # Color annotated in Hex format without the "#"
+background_image = /home/USER/path/to/img.png  # Use absolute paths, not relative ones
+sample_count = 200                             # Dictates how many frequencies a Spectrogram samples
+sample_interpolation_scalar = 0.75             # Adjusts the delay effect of Spectrograms
+timeline_length = 800                          # Sets the amount of samples the Timeline shows
 
 [graphic]
 type = spectrogram
-background_color = 11111A
-shape = line
-style = lines
 position = full
+background_color = none
+shape = flat
+style = lines
+color_scheme = [02A797, 865991, CB2080]
+color_blend = true
+color_glow = false
+
+#[graphic]
+#type = waveform
+#position = bottomleft
+#background_color = none
+#shape = flat
+#style = graph
+#color_scheme = 9d40cd
+#color_blend = false
+#color_glow = false
+
+#[graphic]
+#type = timeline
+#position = bottomright
+#background_color = none
+#shape = flat
+#style = lines
+#color_scheme = 33ccff
+#color_blend = false
+#color_glow = false

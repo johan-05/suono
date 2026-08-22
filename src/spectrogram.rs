@@ -247,16 +247,16 @@ impl Component for Spectrogram {
 
         // main graphic
         match (self.shape, self.style) {
-            (GraphicShape::Line, GraphicStyle::Lines) => {
+            (GraphicShape::Flat, GraphicStyle::Lines) => {
                 self.render_flat_lines(d, fft_results, sample_count);
             }
-            (GraphicShape::Line, GraphicStyle::Graph) => {
+            (GraphicShape::Flat, GraphicStyle::Graph) => {
                 self.render_flat_graph(d, fft_results, sample_count);
             }
-            (GraphicShape::Line, GraphicStyle::Dots) => {
+            (GraphicShape::Flat, GraphicStyle::Dots) => {
                 self.render_flat_dots(d, fft_results, sample_count);
             }
-            (GraphicShape::Line, GraphicStyle::DotsSingle) => {
+            (GraphicShape::Flat, GraphicStyle::DotsSingle) => {
                 self.render_flat_dots_single(d, fft_results, sample_count);
             }
             (GraphicShape::Circle, GraphicStyle::Lines) => {

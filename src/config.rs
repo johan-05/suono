@@ -1,8 +1,5 @@
 use dirs::config_dir;
-use raylib::{
-    ffi::{BlendMode::BLEND_ALPHA, CSSPalette, RaylibPalette},
-    prelude::*,
-};
+use raylib::{ffi::CSSPalette, prelude::*};
 use std::fs;
 
 #[allow(dead_code)]
@@ -13,7 +10,7 @@ const SQUARE_BRACKETS: [char; 2] = ['[', ']'];
 pub fn load_config_file() -> Config {
     let config_file_path = config_dir()
         .expect("failed to locate config directory")
-        .join("musicrc");
+        .join("suono.conf");
 
     let config_file = match std::fs::read_to_string(&config_file_path) {
         Ok(file) => file,
@@ -36,18 +33,17 @@ pub fn load_config_file() -> Config {
 
 #[derive(Debug)]
 pub struct Config {
-    pub sample_count: usize,
-    pub sample_interpolation_scalar: f32,
     pub background_color: Color,
     pub background_image: Option<Image>,
+    pub sample_count: usize,
+    pub sample_interpolation_scalar: f32,
+    pub timeline_length: usize,
     pub graphics: Vec<GraphicConfig>,
 }
 
 impl Config {
     fn default() -> Self {
         return Config {
-            sample_count: 200,
-            sample_interpolation_scalar: 0.75,
             background_color: Color {
                 r: 17,
                 g: 17,
@@ -55,24 +51,27 @@ impl Config {
                 a: 255,
             },
             background_image: None,
+            sample_count: 200,
+            sample_interpolation_scalar: 0.75,
+            timeline_length: 800,
             graphics: Vec::new(),
         };
     }
 
     fn modify_parameter(&mut self, parameter: &str, value: &str) {
         let parameter = parameter.trim().to_lowercase();
-        let value = value.trim();
+        let value = value.trim().to_lowercase();
 
         match parameter.as_str() {
-            "sample_count" => self.sample_count = str::parse::<usize>(value).unwrap_or(200),
+            "sample_count" => self.sample_count = str::parse::<usize>(&value).unwrap_or(200),
             "sample_interpolation_scalar" => {
-                self.sample_interpolation_scalar = str::parse::<f32>(value).unwrap_or(0.75)
+                self.sample_interpolation_scalar = str::parse::<f32>(&value).unwrap_or(0.75)
             }
             "background_color" => {
-                self.background_color = Color::from_hex(value).unwrap_or(Color::BLACK);
+                self.background_color = Color::from_hex(&value).unwrap_or(Color::BLACK);
             }
             "background_image" => {
-                self.background_image = match Image::load_image(value) {
+                self.background_image = match Image::load_image(&value) {
                     Ok(image) => Some(image),
                     Err(e) => {
                         println!("failed to load image {}, error: {}", value, e);
@@ -80,6 +79,7 @@ impl Config {
                     }
                 };
             }
+            "timeline_length" => self.timeline_length = str::parse::<usize>(&value).unwrap_or(800),
             _ => println!("Could not set parameter {} to value {}", parameter, value),
         };
     }
@@ -103,10 +103,10 @@ impl GraphicConfig {
                 r: 17,
                 g: 17,
                 b: 26,
-                a: 255,
+                a: 0,
             },
             position: GraphicPosition::Full,
-            shape: GraphicShape::Line,
+            shape: GraphicShape::Flat,
             style: GraphicStyle::Graph,
             color_scheme: ColorScheme {
                 colors: vec![
@@ -164,9 +164,9 @@ impl GraphicConfig {
             }
             "shape" => {
                 self.shape = match value {
-                    "line" => GraphicShape::Line,
+                    "flat" => GraphicShape::Flat,
                     "circle" => GraphicShape::Circle,
-                    _ => GraphicShape::Line,
+                    _ => GraphicShape::Flat,
                 }
             }
             "style" => {
@@ -237,7 +237,7 @@ pub enum GraphicPosition {
 
 #[derive(Clone, Copy, Debug)]
 pub enum GraphicShape {
-    Line,
+    Flat,
     Circle,
 }
 
