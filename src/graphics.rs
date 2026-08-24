@@ -11,7 +11,7 @@ pub trait Component {
         fft_rasults: &Vec<f32>,
         sample_size: usize,
         decoded_audio: &[f32],
-        audio_history: [i32; 400],
+        audio_history: &Vec<i32>,
     );
     fn update(&mut self, new_width: i32, new_height: i32, sample_count: usize);
 }
@@ -39,6 +39,7 @@ fn blend_colors(colors: &Vec<Color>, t: f32) -> Color {
     let fade_count = (colors.len() - 1) as f32;
     let color_index = f32::floor(fade_count * t);
     let true_t = fade_count * t - color_index as f32;
+
     return fade_rgb(
         colors[color_index as usize],
         colors[color_index as usize + 1],

@@ -1,5 +1,5 @@
 use crate::config::*;
-use crate::graphics::{process_colors, Component};
+use crate::graphics::{Component, process_colors};
 use ffi::rlSetLineWidth;
 use raylib::prelude::*;
 
@@ -234,7 +234,7 @@ impl Component for Spectrogram {
         fft_results: &Vec<f32>,
         sample_count: usize,
         _decoded_audio: &[f32],
-        _audio_history: [i32; 400],
+        _audio_history: &Vec<i32>,
     ) {
         // background
         d.draw_rectangle(

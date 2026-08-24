@@ -17,7 +17,7 @@ use suono::Suono;
 TODO:
     Background img              ✓
     github + README.md          ✓
-    build.rs                    x
+    build.rs                    ✓
     color blending              ✓
     PW compatability            x
     optimizing+parallelizing    x
@@ -38,6 +38,5 @@ fn main() -> ! {
         suono.update_screen_dimensions();
         suono.update_audio_data();
         suono.render();
-        std::thread::sleep(Duration::from_millis(14));
     }
 }

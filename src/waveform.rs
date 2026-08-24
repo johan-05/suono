@@ -1,5 +1,5 @@
 use crate::config::*;
-use crate::graphics::{process_colors, Component};
+use crate::graphics::{Component, process_colors};
 use ffi::rlSetLineWidth;
 use raylib::prelude::*;
 
@@ -151,7 +151,7 @@ impl Component for Waveform {
         _fft_results: &Vec<f32>,
         _sample_count: usize,
         decoded_audio: &[f32],
-        _audio_history: [i32; 400],
+        _audio_history: &Vec<i32>,
     ) {
         d.draw_rectangle(
             self.topleft.0,
@@ -200,7 +200,7 @@ impl Component for Waveform {
 
         //TODO: user defined line thickness instead of hard coding it
         //                 ↓
-        let line_width = 0.60 * new_width as f32 / sample_count as f32;
+        let line_width = 0.40 * new_width as f32 / sample_count as f32;
         unsafe { rlSetLineWidth(line_width) };
     }
 }

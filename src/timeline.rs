@@ -1,6 +1,13 @@
 use crate::config::*;
-use crate::graphics::{process_colors, Component};
+use crate::graphics::{Component, process_colors};
 use raylib::prelude::*;
+use std::iter::Chain;
+use std::slice::Iter;
+
+struct Line {
+    start: Vector2,
+    end: Vector2,
+}
 
 pub struct Timeline {
     //config
@@ -45,20 +52,45 @@ impl Timeline {
         });
     }
 
-    fn render_lines(&mut self, d: &mut RaylibDrawHandle, audio_history: [i32; 400]) {
-        d.draw_rectangle(
-            self.topleft.0,
-            self.topleft.1,
-            self.width,
-            self.height,
-            self.background_color,
-        );
-        let sample_interval = self.width as f32 / 400.0;
+    fn get_audio_history_iterator<'a>(
+        &self,
+        audio_history: &'a Vec<i32>,
+    ) -> Chain<Iter<'a, i32>, Iter<'a, i32>> {
         let start_index = audio_history.iter().position(|s| *s == 0).unwrap_or(0);
         let first_slice = &audio_history[start_index..];
         let second_slice = &audio_history[..start_index];
+        return first_slice.into_iter().chain(second_slice.into_iter());
+    }
 
-        first_slice.iter().enumerate().for_each(|(i, s)| {
+    fn calculate_line_position(&self, i: f32, s: f32, sample_interval: f32) -> Line {
+        Line {
+            start: Vector2 {
+                x: self.topleft.0 as f32 + i * sample_interval,
+                y: self.topleft.1 as f32
+                    + self.height as f32 / 2.0
+                    + (s * self.height as f32 / 360.0),
+            },
+            end: Vector2 {
+                x: self.topleft.0 as f32 + i * sample_interval,
+                y: self.topleft.1 as f32 + self.height as f32 / 2.0
+                    - (s * self.height as f32 / 360.0),
+            },
+        }
+    }
+
+    fn render_lines(&mut self, d: &mut RaylibDrawHandle, audio_history: &Vec<i32>) {
+        let audio_history_iter = self.get_audio_history_iterator(&audio_history);
+        let sample_interval = self.width as f32 / audio_history.len() as f32;
+
+        audio_history_iter.enumerate().for_each(|(i, s)| {
+            // t goes from 0.0 at the right border to 1.0 as left border
+            let t = i as f32 / audio_history.len() as f32;
+            let line_color = process_colors(&self.color_scheme, t.clamp(0.0, 0.9999));
+            let line = self.calculate_line_position(i as f32, *s as f32, sample_interval);
+            d.draw_line_v(line.start, line.end, line_color);
+        });
+
+        /*first_slice.iter().enumerate().for_each(|(i, s)| {
             let color = process_colors(&self.color_scheme, i as f32 / 400.0);
             d.draw_line(
                 (i as f32 * sample_interval) as i32 + self.topleft.0,
@@ -79,18 +111,10 @@ impl Timeline {
                 self.topleft.1 + self.height / 2 - (s * self.height / 360),
                 color,
             );
-        });
+        });*/
     }
 
-    fn render_graph(&mut self, d: &mut RaylibDrawHandle, audio_history: [i32; 400]) {
-        d.draw_rectangle(
-            self.topleft.0,
-            self.topleft.1,
-            self.width,
-            self.height,
-            self.background_color,
-        );
-
+    fn render_graph(&mut self, d: &mut RaylibDrawHandle, audio_history: &Vec<i32>) {
         let sample_interval = self.width as f32 / 400.0;
         let start_index = audio_history.iter().position(|s| *s == 0).unwrap_or(0);
         let first_slice = &audio_history[start_index..];
@@ -100,12 +124,12 @@ impl Timeline {
             .iter()
             .enumerate()
             .map(|(i, s)| Vector2 {
-                x: (i as f32 * sample_interval) as f32,
-                y: (self.height / 2 - s - 1) as f32,
+                x: (i as f32 * sample_interval) as f32 + self.topleft.0 as f32,
+                y: ((self.height / 2 + self.topleft.1) - (s * self.height / 360) - 1) as f32,
             })
             .chain(second_slice.iter().enumerate().map(|(i, s)| Vector2 {
                 x: (i + (400 - start_index)) as f32 * sample_interval,
-                y: (self.height / 2 - s - 1) as f32,
+                y: (self.height / 2 - (s * self.height / 360) - 1) as f32,
             }))
             .collect::<Vec<Vector2>>();
 
@@ -125,11 +149,11 @@ impl Timeline {
             .enumerate()
             .map(|(i, s)| Vector2 {
                 x: (i as f32 * sample_interval) as f32,
-                y: (self.height / 2 + s + 1) as f32,
+                y: (self.height / 2 + (s * self.height / 360) + 1) as f32,
             })
             .chain(second_slice.iter().enumerate().map(|(i, s)| Vector2 {
                 x: (i + (400 - start_index)) as f32 * sample_interval,
-                y: (self.height / 2 + s + 1) as f32,
+                y: (self.height / 2 + (s * self.height / 360) + 1) as f32,
             }))
             .collect::<Vec<Vector2>>();
 
@@ -145,15 +169,7 @@ impl Timeline {
         );
     }
 
-    fn render_dots(&mut self, d: &mut RaylibDrawHandle, audio_history: [i32; 400]) {
-        d.draw_rectangle(
-            self.topleft.0,
-            self.topleft.1,
-            self.width,
-            self.height,
-            self.background_color,
-        );
-
+    fn render_dots(&mut self, d: &mut RaylibDrawHandle, audio_history: &Vec<i32>) {
         let sample_interval = self.width as f32 / 400.0;
         let start_index = audio_history.iter().position(|s| *s == 0).unwrap_or(0);
         let first_slice = &audio_history[start_index..];
@@ -194,7 +210,7 @@ impl Timeline {
         });
     }
 
-    fn render_dots_single(&mut self, _d: &mut RaylibDrawHandle, _audio_history: [i32; 400]) {
+    fn render_dots_single(&mut self, _d: &mut RaylibDrawHandle, _audio_history: &Vec<i32>) {
         unimplemented!("UNIMPLEMENTED BRUH MOMENT");
     }
 }
@@ -206,20 +222,24 @@ impl Component for Timeline {
         _fft_results: &Vec<f32>,
         _sample_count: usize,
         _decoded_audio: &[f32],
-        audio_history: [i32; 400],
+        audio_history: &Vec<i32>,
     ) {
+        d.draw_rectangle(
+            self.topleft.0,
+            self.topleft.1,
+            self.width,
+            self.height,
+            self.background_color,
+        );
         match self.style {
             GraphicStyle::Lines => self.render_lines(d, audio_history),
             GraphicStyle::Graph => self.render_graph(d, audio_history),
             GraphicStyle::Dots => self.render_dots(d, audio_history),
-            GraphicStyle::DotsSingle => {
-                self.render_dots_single(d, audio_history);
-            }
+            GraphicStyle::DotsSingle => self.render_dots_single(d, audio_history),
         }
     }
 
     fn update(&mut self, new_width: i32, new_height: i32, _sample_count: usize) {
-        println!("printed");
         (self.width, self.height) = match self.position {
             GraphicPosition::Full => (new_width, new_height),
             GraphicPosition::Top | GraphicPosition::Bottom => (new_width, new_height / 2),
@@ -232,9 +252,9 @@ impl Component for Timeline {
             | GraphicPosition::TopLeft
             | GraphicPosition::Top
             | GraphicPosition::Left => (0, 0),
-            GraphicPosition::Right | GraphicPosition::TopRight => (self.width / 2, 0),
-            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0, self.height / 2),
-            GraphicPosition::BottomRight => (self.width / 2, self.height / 2),
+            GraphicPosition::Right | GraphicPosition::TopRight => (self.width, 0),
+            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0, self.height),
+            GraphicPosition::BottomRight => (self.width, self.height),
         };
     }
 }

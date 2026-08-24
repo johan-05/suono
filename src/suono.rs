@@ -32,7 +32,7 @@ pub struct Suono {
     window_width: i32,
     target_frequencies: Vec<f32>,
     decoded_audio_buffer: [f32; 2048],
-    audio_history: [i32; 400],
+    audio_history: Vec<i32>,
     fft_results: Vec<f32>,
     //raylib stuff
     pub rl: RaylibHandle,
@@ -49,7 +49,7 @@ impl Suono {
             .size(1279, 720)
             .title("Trap Nation ripoff™")
             .build();
-
+        rl.set_target_fps(60);
         //let rl_audio = RaylibAudio::init_audio_device().expect("audio init failed");
 
         let audio_data_arc = Arc::new(Mutex::new([0.0; 2048]));
@@ -72,7 +72,7 @@ impl Suono {
 
         let target_frequencies = create_target_frequenzies(config.sample_count);
 
-        let audio_history = [0; 400];
+        let audio_history = vec![0; config.timeline_length];
         let decoded_audio_buffer = [0.0; 2048];
 
         let fft_results = vec![0.0; config.sample_count];
@@ -154,6 +154,7 @@ impl Suono {
     }
 
     pub fn render(&mut self) {
+        let fps = "FPS: ".to_owned() + &self.rl.get_fps().to_string().as_str();
         let mut d = self.rl.begin_drawing(&self.thread);
         d.clear_background(self.background_color);
 
@@ -183,9 +184,10 @@ impl Suono {
                 &self.fft_results,
                 self.sample_count,
                 &self.decoded_audio_buffer.as_slice(),
-                self.audio_history,
+                &self.audio_history,
             );
         }
+        d.draw_text(&fps, 10, 10, 16, Color::WHITE);
     }
 }
 
