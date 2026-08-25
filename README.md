@@ -34,6 +34,7 @@ background_image = /home/USER/path/to/img.png  # Use absolute paths, not relativ
 sample_count = 200                             # Dictates how many frequencies a Spectrogram samples
 sample_interpolation_scalar = 0.75             # Adjusts the delay effect of Spectrograms
 timeline_length = 800                          # Sets the amount of samples the Timeline shows
+line_width = 4.0                               # Sets the thickness of lines
 ```
 
 ### Graphics
