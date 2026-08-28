@@ -11,9 +11,9 @@ pub trait Component {
         fft_rasults: &Vec<f32>,
         sample_size: usize,
         decoded_audio: &[f32],
-        audio_history: &Vec<i32>,
+        audio_history: &Vec<f32>,
     );
-    fn update(&mut self, new_width: i32, new_height: i32, sample_count: usize);
+    fn update(&mut self, new_width: f32, new_height: f32, sample_count: usize);
 }
 
 //                                      t between 0.0 and 1.0
@@ -64,7 +64,7 @@ fn fade_rgb(from: Color, to: Color, t: f32) -> Color {
     };
 }
 
-const RAINBOW: [Color; 10] = [
+const _RAINBOW: [Color; 10] = [
     Color {
         r: 204,
         g: 47,

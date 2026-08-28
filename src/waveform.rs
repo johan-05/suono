@@ -7,38 +7,36 @@ pub struct Waveform {
     //config
     background_color: Color,
     position: GraphicPosition,
-    shape: GraphicShape,
     style: GraphicStyle,
     color_scheme: ColorScheme,
     //state
-    width: i32,
-    height: i32,
-    topleft: (i32, i32),
+    width: f32,
+    height: f32,
+    topleft: (f32, f32),
 }
 
 impl Waveform {
     pub fn init(config: GraphicConfig) -> Box<dyn Component> {
         let (width, height) = match config.position {
-            GraphicPosition::Full => (1280, 720),
-            GraphicPosition::Top | GraphicPosition::Bottom => (1280, 360),
-            GraphicPosition::Left | GraphicPosition::Right => (640, 720),
-            _ => (640, 360),
+            GraphicPosition::Full => (1280.0, 720.0),
+            GraphicPosition::Top | GraphicPosition::Bottom => (1280.0, 360.0),
+            GraphicPosition::Left | GraphicPosition::Right => (640.0, 720.0),
+            _ => (640.0, 360.0),
         };
 
         let topleft = match config.position {
             GraphicPosition::Full
             | GraphicPosition::TopLeft
             | GraphicPosition::Top
-            | GraphicPosition::Left => (0, 0),
-            GraphicPosition::Right | GraphicPosition::TopRight => (640, 0),
-            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0, 360),
-            GraphicPosition::BottomRight => (640, 360),
+            | GraphicPosition::Left => (0.0, 0.0),
+            GraphicPosition::Right | GraphicPosition::TopRight => (640.0, 0.0),
+            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0.0, 360.0),
+            GraphicPosition::BottomRight => (640.0, 360.0),
         };
 
         return Box::new(Waveform {
             background_color: config.background_color,
             position: config.position,
-            shape: config.shape,
             style: config.style,
             color_scheme: config.color_scheme,
             width: width,
@@ -151,50 +149,39 @@ impl Component for Waveform {
         _fft_results: &Vec<f32>,
         _sample_count: usize,
         decoded_audio: &[f32],
-        _audio_history: &Vec<i32>,
+        _audio_history: &Vec<f32>,
     ) {
         d.draw_rectangle(
-            self.topleft.0,
-            self.topleft.1,
-            self.width,
-            self.height,
+            self.topleft.0 as i32,
+            self.topleft.1 as i32,
+            self.width as i32,
+            self.height as i32,
             self.background_color,
         );
 
-        match (self.shape, self.style) {
-            (GraphicShape::Flat, GraphicStyle::Lines) => {
-                self.render_lines(d, decoded_audio);
-            }
-            (GraphicShape::Flat, GraphicStyle::Graph) => {
-                self.render_graph(d, decoded_audio);
-            }
-            (GraphicShape::Flat, GraphicStyle::Dots) => {
-                self.render_dots(d, decoded_audio);
-            }
-            (GraphicShape::Flat, GraphicStyle::DotsSingle) => {
-                self.render_dots_single(d, decoded_audio);
-            }
-            _ => {
-                unimplemented!("Circle not supported here")
-            }
+        match self.style {
+            GraphicStyle::Lines => self.render_lines(d, decoded_audio),
+            GraphicStyle::Graph => self.render_graph(d, decoded_audio),
+            GraphicStyle::Dots => self.render_dots(d, decoded_audio),
+            GraphicStyle::DotsSingle => self.render_dots_single(d, decoded_audio),
         }
     }
 
-    fn update(&mut self, new_width: i32, new_height: i32, sample_count: usize) {
+    fn update(&mut self, new_width: f32, new_height: f32, sample_count: usize) {
         (self.width, self.height) = match self.position {
             GraphicPosition::Full => (new_width, new_height),
-            GraphicPosition::Top | GraphicPosition::Bottom => (new_width, new_height / 2),
-            GraphicPosition::Left | GraphicPosition::Right => (new_width / 2, new_height),
-            _ => (new_width / 2, new_height / 2),
+            GraphicPosition::Top | GraphicPosition::Bottom => (new_width, new_height / 2.0),
+            GraphicPosition::Left | GraphicPosition::Right => (new_width / 2.0, new_height),
+            _ => (new_width / 2.0, new_height / 2.0),
         };
 
         self.topleft = match self.position {
             GraphicPosition::Full
             | GraphicPosition::TopLeft
             | GraphicPosition::Top
-            | GraphicPosition::Left => (0, 0),
-            GraphicPosition::Right | GraphicPosition::TopRight => (self.width, 0),
-            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0, self.height),
+            | GraphicPosition::Left => (0.0, 0.0),
+            GraphicPosition::Right | GraphicPosition::TopRight => (self.width, 0.0),
+            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0.0, self.height),
             GraphicPosition::BottomRight => (self.width, self.height),
         };
 

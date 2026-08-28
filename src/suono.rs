@@ -15,8 +15,6 @@ use cpal::{DeviceId, Stream, StreamConfig};
 use std::f32::consts::{E, PI};
 use std::sync::{Arc, Mutex};
 
-use rayon::prelude::*;
-
 #[allow(dead_code)]
 #[allow(unused_variables)]
 
@@ -28,11 +26,11 @@ pub struct Suono {
     pub background_image: Option<Texture2D>,
     pub graphic_elements: Vec<Box<dyn Component>>,
     //state
-    window_height: i32,
-    window_width: i32,
+    window_height: f32,
+    window_width: f32,
     target_frequencies: Vec<f32>,
     decoded_audio_buffer: [f32; 2048],
-    audio_history: Vec<i32>,
+    audio_history: Vec<f32>,
     fft_results: Vec<f32>,
     //raylib stuff
     pub rl: RaylibHandle,
@@ -45,19 +43,16 @@ pub struct Suono {
 #[allow(dead_code)]
 impl Suono {
     pub fn init(config: Config) -> Self {
-        let (mut rl, thread) = raylib::init()
-            .size(1279, 720)
-            .title("Trap Nation ripoff™")
-            .build();
+        let (mut rl, thread) = raylib::init().size(1279, 720).title("Suono").build();
+
         rl.set_target_fps(60);
-        //let rl_audio = RaylibAudio::init_audio_device().expect("audio init failed");
 
         let audio_data_arc = Arc::new(Mutex::new([0.0; 2048]));
         let audio_stream = pipewire_init(audio_data_arc.clone());
         audio_stream.play().expect("could not play stream");
 
-        let window_width = rl.get_screen_width();
-        let window_height = rl.get_screen_height();
+        let window_width = rl.get_screen_width() as f32;
+        let window_height = rl.get_screen_height() as f32;
 
         unsafe { SetConfigFlags(FLAG_WINDOW_RESIZABLE) };
 
@@ -70,9 +65,9 @@ impl Suono {
 
         let graphic_elements = Suono::create_graphic_elements(config.graphics);
 
-        let target_frequencies = create_target_frequenzies(config.sample_count);
+        let target_frequencies = create_target_frequencies(config.sample_count);
 
-        let audio_history = vec![0; config.timeline_length];
+        let audio_history = vec![0.0; config.timeline_length];
         let decoded_audio_buffer = [0.0; 2048];
 
         let fft_results = vec![0.0; config.sample_count];
@@ -98,8 +93,8 @@ impl Suono {
     }
 
     pub fn update_screen_dimensions(&mut self) {
-        let new_width = self.rl.get_screen_width();
-        let new_height = self.rl.get_screen_height();
+        let new_width = self.rl.get_screen_width() as f32;
+        let new_height = self.rl.get_screen_height() as f32;
         //println!("{}, {}", &new_width, &new_height);
         if new_width != self.window_width || new_height != self.window_height {
             println!("changed height {new_height}, width {new_width}");
@@ -120,13 +115,17 @@ impl Suono {
             .chunks(350)
             .map(|c| c.iter().map(|s| f32::abs(*s)).sum::<f32>())
             .for_each(|n| {
-                let index = self.audio_history.iter().position(|i| *i == 0).unwrap_or(0);
+                let index = self
+                    .audio_history
+                    .iter()
+                    .position(|i| *i == 0.0)
+                    .unwrap_or(0);
                 if index != self.audio_history.len() - 1 {
-                    self.audio_history[index] = 5 * n as i32;
-                    self.audio_history[index + 1] = 0;
+                    self.audio_history[index] = 5.0 * n;
+                    self.audio_history[index + 1] = 0.0;
                 } else {
-                    self.audio_history[index] = 5 * n as i32;
-                    self.audio_history[0] = 0;
+                    self.audio_history[index] = 5.0 * n;
+                    self.audio_history[0] = 0.0;
                 }
             });
 
@@ -225,14 +224,15 @@ fn pipewire_init(audio_data_arc: Arc<Mutex<[f32; 2048]>>) -> Stream {
     return stream;
 }
 
-// RTFM https://en.wikipedia.org/wiki/Fast_Fourier_transform#FFT_algorithms_specialized_for_real_or_symmetric_data
+// theory: https://en.wikipedia.org/wiki/Fast_Fourier_transform#FFT_algorithms_specialized_for_real_or_symmetric_data
 // pretty standard implementation with a bit of e^ix = cos(x) + i*sin(x) shenanigans
 fn fft_custom(data: &[f32], target_frequencies: &Vec<f32>) -> Vec<f32> {
     target_frequencies
-        .par_iter()
+        .iter()
         .map(|target_f| {
             let forier_data = data
                 .into_iter()
+                .step_by(6)
                 .enumerate()
                 .map(|(i, d)| {
                     let t = i as f32 / 44100.0;
@@ -256,8 +256,8 @@ fn fft_custom(data: &[f32], target_frequencies: &Vec<f32>) -> Vec<f32> {
 
 // return a Vec of length "sample_count" with number logarithmically destributed between 0 and 20*e^(6.3) witch is 10 891
 // for no other readon than that it looks good
-fn create_target_frequenzies(sample_count: usize) -> Vec<f32> {
+pub fn create_target_frequencies(sample_count: usize) -> Vec<f32> {
     (0..sample_count)
-        .map(|i| 16.0 * E.powf(5.8 * i as f32 / sample_count as f32))
+        .map(|i| 60.0 * E.powf(5.1 * i as f32 / sample_count as f32))
         .collect::<Vec<f32>>()
 }

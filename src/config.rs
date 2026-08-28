@@ -53,7 +53,7 @@ impl Config {
             background_image: None,
             sample_count: 200,
             sample_interpolation_scalar: 0.75,
-            timeline_length: 800,
+            timeline_length: 400,
             graphics: Vec::new(),
         };
     }
@@ -90,7 +90,6 @@ pub struct GraphicConfig {
     pub graphics_type: GraphicType,
     pub background_color: Color,
     pub position: GraphicPosition,
-    pub shape: GraphicShape,
     pub style: GraphicStyle,
     pub color_scheme: ColorScheme,
 }
@@ -106,7 +105,6 @@ impl GraphicConfig {
                 a: 0,
             },
             position: GraphicPosition::Full,
-            shape: GraphicShape::Flat,
             style: GraphicStyle::Graph,
             color_scheme: ColorScheme {
                 colors: vec![
@@ -129,7 +127,6 @@ impl GraphicConfig {
                         a: 255,
                     },
                 ],
-                orientation: Orientation::Horizintal,
                 blend: true,
                 glow: false,
             },
@@ -161,13 +158,6 @@ impl GraphicConfig {
                     "bottomright" => GraphicPosition::BottomRight,
                     _ => GraphicPosition::Full,
                 };
-            }
-            "shape" => {
-                self.shape = match value {
-                    "flat" => GraphicShape::Flat,
-                    "circle" => GraphicShape::Circle,
-                    _ => GraphicShape::Flat,
-                }
             }
             "style" => {
                 self.style = match value {
@@ -236,12 +226,6 @@ pub enum GraphicPosition {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum GraphicShape {
-    Flat,
-    Circle,
-}
-
-#[derive(Clone, Copy, Debug)]
 pub enum GraphicStyle {
     Lines,
     Graph,
@@ -249,17 +233,9 @@ pub enum GraphicStyle {
     DotsSingle,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Orientation {
-    Vertical,
-    Horizintal,
-    //Diagonal(u8), Proceed if you dare!
-}
-
 #[derive(Clone, Debug)]
 pub struct ColorScheme {
     pub colors: Vec<Color>,
-    pub orientation: Orientation,
     pub blend: bool,
     pub glow: bool,
 }

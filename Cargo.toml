@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 cpal = "0.18.1"
 dirs = "5.0.1"
+itertools = "0.15.0"
 puremp3 = "0.1.0"
 raylib = {version = "6.0.0", features = ["SUPPORT_FILEFORMAT_JPG"]}
-rayon = "1.10.0"
 rustfft = "6.2.0"

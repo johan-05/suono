@@ -4,7 +4,7 @@ mod spectrogram;
 mod suono;
 mod timeline;
 mod waveform;
-use std::time::Duration;
+use crate::suono::create_target_frequencies;
 
 use config::load_config_file;
 
@@ -20,21 +20,25 @@ TODO:
     build.rs                    ✓
     color blending              ✓
     PW compatability            x
-    optimizing+parallelizing    x
+    optimizing+parallelizing    ✓
     steal from cavalier         x
+    timeline simplification     ✓
+    waveform simplification     x
+    spectrogram simplification  x
 
     maybe:
-    modulate sampeling rate     x
+    razor copy                  x
+    temperature spectrogram     x
     color glow                  x
     shaders                     x
 */
 
-fn main() -> ! {
+fn main() {
     let config = load_config_file();
     println!("{config:#?}");
     let mut suono = Suono::init(config);
 
-    loop {
+    while !suono.rl.window_should_close() {
         suono.update_screen_dimensions();
         suono.update_audio_data();
         suono.render();
