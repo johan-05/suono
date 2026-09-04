@@ -10,6 +10,40 @@ struct Line {
     end: Vector2,
 }
 
+impl Line {
+    fn clamp_y(&mut self, height: f32) {
+        let len = f32::abs(self.start.y - self.end.y);
+        let diff = len - height;
+        if diff > 0.0 {
+            self.start.y -= diff / 2.0;
+            self.end.y += diff / 2.0;
+        }
+    }
+}
+
+struct GraphSegment {
+    top: Line,
+    bottom: Line,
+}
+
+impl GraphSegment {
+    fn clamp_y(&mut self, height: f32) {
+        let len_start = f32::abs(self.top.start.y - self.bottom.start.y);
+        let diff_start = len_start - height;
+        if diff_start > 0.0 {
+            self.top.start.y -= diff_start / 2.0;
+            self.bottom.start.y += diff_start / 2.0;
+        }
+
+        let len_end = f32::abs(self.top.end.y - self.bottom.end.y);
+        let diff_end = len_end - height;
+        if diff_end > 0.0 {
+            self.top.end.y -= diff_end / 2.0;
+            self.bottom.end.y += diff_end / 2.0;
+        }
+    }
+}
+
 pub struct Timeline {
     //config
     background_color: Color,
@@ -62,16 +96,18 @@ impl Timeline {
     }
 
     fn calculate_vertical_line_position(&self, i: f32, s: f32, sample_interval: f32) -> Line {
-        Line {
+        let mut line = Line {
             start: Vector2 {
                 x: self.topleft.0 + i * sample_interval,
-                y: self.topleft.1 + self.height / 2.0 + (s * self.height / 560.0),
+                y: self.topleft.1 + self.height / 2.0 + (s * self.height / 600.0),
             },
             end: Vector2 {
                 x: self.topleft.0 + i * sample_interval,
-                y: self.topleft.1 + self.height / 2.0 - (s * self.height / 560.0),
+                y: self.topleft.1 + self.height / 2.0 - (s * self.height / 600.0),
             },
-        }
+        };
+        line.clamp_y(self.height);
+        return line;
     }
 
     fn calculate_graph_line_position(
@@ -80,29 +116,32 @@ impl Timeline {
         s1: f32,
         s2: f32,
         sample_interval: f32,
-    ) -> (Line, Line) {
-        (
-            Line {
+    ) -> GraphSegment {
+        let mut graph_segment = GraphSegment {
+            top: Line {
                 start: Vector2 {
                     x: self.topleft.0 + i * sample_interval,
-                    y: self.topleft.1 + self.height / 2.0 + (s1 * self.height / 560.0),
+                    y: self.topleft.1 + self.height / 2.0 + (s1 * self.height / 600.0),
                 },
                 end: Vector2 {
                     x: self.topleft.0 + (i + 1.0) * sample_interval,
-                    y: self.topleft.1 + self.height / 2.0 + (s2 * self.height / 560.0),
+                    y: self.topleft.1 + self.height / 2.0 + (s2 * self.height / 600.0),
                 },
             },
-            Line {
+            bottom: Line {
                 start: Vector2 {
                     x: self.topleft.0 + i * sample_interval,
-                    y: self.topleft.1 as f32 + self.height / 2.0 - (s1 * self.height / 560.0),
+                    y: self.topleft.1 as f32 + self.height / 2.0 - (s1 * self.height / 600.0),
                 },
                 end: Vector2 {
                     x: self.topleft.0 + (i + 1.0) * sample_interval,
-                    y: self.topleft.1 + self.height / 2.0 - (s2 * self.height / 560.0),
+                    y: self.topleft.1 + self.height / 2.0 - (s2 * self.height / 600.0),
                 },
             },
-        )
+        };
+
+        graph_segment.clamp_y(self.height);
+        return graph_segment;
     }
 
     fn render_lines(&mut self, d: &mut RaylibDrawHandle, audio_history: &Vec<f32>) {
@@ -127,16 +166,12 @@ impl Timeline {
             .for_each(|(i, (s1, s2))| {
                 let t = i as f32 / audio_history.len() as f32;
                 let line_color = process_colors(&self.color_scheme, t.clamp(0.0, 0.9999));
-                let (upper_graph_segment, lower_graph_segment) =
+                let graph_segment =
                     self.calculate_graph_line_position(i as f32, *s1, *s2, sample_interval);
+                d.draw_line_v(graph_segment.top.start, graph_segment.top.end, line_color);
                 d.draw_line_v(
-                    upper_graph_segment.start,
-                    upper_graph_segment.end,
-                    line_color,
-                );
-                d.draw_line_v(
-                    lower_graph_segment.start,
-                    lower_graph_segment.end,
+                    graph_segment.bottom.start,
+                    graph_segment.bottom.end,
                     line_color,
                 );
             });
@@ -164,7 +199,6 @@ impl Component for Timeline {
         &mut self,
         d: &mut RaylibDrawHandle,
         _fft_results: &Vec<f32>,
-        _sample_count: usize,
         _decoded_audio: &[f32],
         audio_history: &Vec<f32>,
     ) {

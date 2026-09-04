@@ -181,7 +181,6 @@ impl Suono {
             graphic.render(
                 &mut d,
                 &self.fft_results,
-                self.sample_count,
                 &self.decoded_audio_buffer.as_slice(),
                 &self.audio_history,
             );

@@ -48,13 +48,8 @@ impl Spectrogram {
         });
     }
 
-    fn render_flat_lines(
-        &mut self,
-        d: &mut RaylibDrawHandle,
-        fft_results: &Vec<f32>,
-        sample_count: usize,
-    ) {
-        let sample_interval_x = self.width as f32 / sample_count as f32;
+    fn render_flat_lines(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
+        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
@@ -71,7 +66,7 @@ impl Spectrogram {
             .into_iter()
             .enumerate()
             .for_each(|(i, (x, h))| {
-                let color = process_colors(&self.color_scheme, i as f32 / sample_count as f32);
+                let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
                 d.draw_line_v(
                     Vector2 {
                         x: x + self.topleft.0,
@@ -86,13 +81,8 @@ impl Spectrogram {
             });
     }
 
-    fn render_flat_graph(
-        &mut self,
-        d: &mut RaylibDrawHandle,
-        fft_results: &Vec<f32>,
-        sample_count: usize,
-    ) {
-        let sample_interval_x = self.width as f32 / sample_count as f32;
+    fn render_flat_graph(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
+        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
@@ -108,18 +98,13 @@ impl Spectrogram {
             .tuple_windows()
             .enumerate()
             .for_each(|(i, (p1, p2))| {
-                let color = process_colors(&self.color_scheme, i as f32 / sample_count as f32);
+                let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
                 d.draw_line_v(*p1, *p2, color);
             })
     }
 
-    fn render_flat_dots(
-        &mut self,
-        d: &mut RaylibDrawHandle,
-        fft_results: &Vec<f32>,
-        sample_count: usize,
-    ) {
-        let sample_interval_x = self.width as f32 / sample_count as f32;
+    fn render_flat_dots(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
+        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
@@ -131,7 +116,7 @@ impl Spectrogram {
             .collect::<Vec<Vector2>>();
 
         point_positions.into_iter().enumerate().for_each(|(i, v)| {
-            let color = process_colors(&self.color_scheme, i as f32 / sample_count as f32);
+            let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
             d.draw_line_dashed(
                 Vector2 {
                     x: v.x,
@@ -145,13 +130,8 @@ impl Spectrogram {
         });
     }
 
-    fn render_flat_dots_single(
-        &mut self,
-        d: &mut RaylibDrawHandle,
-        fft_results: &Vec<f32>,
-        sample_count: usize,
-    ) {
-        let sample_interval_x = self.width as f32 / sample_count as f32;
+    fn render_flat_dots_single(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
+        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
@@ -165,7 +145,7 @@ impl Spectrogram {
             .collect::<Vec<(i32, i32)>>();
 
         point_positions.into_iter().enumerate().for_each(|(i, p)| {
-            let color = process_colors(&self.color_scheme, i as f32 / sample_count as f32);
+            let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
 
             d.draw_circle(
                 self.topleft.0 as i32 + p.0,
@@ -182,7 +162,6 @@ impl Component for Spectrogram {
         &mut self,
         d: &mut RaylibDrawHandle,
         fft_results: &Vec<f32>,
-        sample_count: usize,
         _decoded_audio: &[f32],
         _audio_history: &Vec<f32>,
     ) {
@@ -198,16 +177,16 @@ impl Component for Spectrogram {
         // main graphic
         match self.style {
             GraphicStyle::Lines => {
-                self.render_flat_lines(d, fft_results, sample_count);
+                self.render_flat_lines(d, fft_results);
             }
             GraphicStyle::Graph => {
-                self.render_flat_graph(d, fft_results, sample_count);
+                self.render_flat_graph(d, fft_results);
             }
             GraphicStyle::Dots => {
-                self.render_flat_dots(d, fft_results, sample_count);
+                self.render_flat_dots(d, fft_results);
             }
             GraphicStyle::DotsSingle => {
-                self.render_flat_dots_single(d, fft_results, sample_count);
+                self.render_flat_dots_single(d, fft_results);
             }
         }
     }

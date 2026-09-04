@@ -9,7 +9,6 @@ pub trait Component {
         &mut self,
         d: &mut RaylibDrawHandle,
         fft_rasults: &Vec<f32>,
-        sample_size: usize,
         decoded_audio: &[f32],
         audio_history: &Vec<f32>,
     );
