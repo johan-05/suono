@@ -1,6 +1,5 @@
 use crate::config::*;
 use crate::graphics::{Component, process_colors};
-use ffi::rlSetLineWidth;
 use itertools::Itertools;
 use raylib::prelude::*;
 
@@ -48,8 +47,8 @@ impl Spectrogram {
         });
     }
 
-    fn render_flat_lines(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
-        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
+    fn render_lines(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
+        let sample_interval_x = self.width / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
@@ -57,7 +56,7 @@ impl Spectrogram {
             .map(|(i, r)| {
                 (
                     (i as f32 * sample_interval_x),
-                    (*r * self.height as f32 / 4.0),
+                    (*r * self.height * gain / 4.0),
                 )
             })
             .collect::<Vec<(f32, f32)>>();
@@ -81,15 +80,15 @@ impl Spectrogram {
             });
     }
 
-    fn render_flat_graph(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
-        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
+    fn render_graph(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
+        let sample_interval_x = self.width / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
             .enumerate()
             .map(|(i, r)| Vector2 {
                 x: i as f32 * sample_interval_x,
-                y: self.height - (*r * self.height as f32 / 4.0),
+                y: self.height - (*r * self.height * gain / 4.0),
             })
             .collect::<Vec<Vector2>>();
 
@@ -103,15 +102,15 @@ impl Spectrogram {
             })
     }
 
-    fn render_flat_dots(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
-        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
+    fn render_dots(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
+        let sample_interval_x = self.width / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
             .enumerate()
             .map(|(i, r)| Vector2 {
                 x: i as f32 * sample_interval_x,
-                y: *r * self.height / 4.0,
+                y: *r * self.height * gain / 4.0,
             })
             .collect::<Vec<Vector2>>();
 
@@ -130,8 +129,8 @@ impl Spectrogram {
         });
     }
 
-    fn render_flat_dots_single(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>) {
-        let sample_interval_x = self.width as f32 / fft_results.len() as f32;
+    fn render_dots_single(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
+        let sample_interval_x = self.width / fft_results.len() as f32;
 
         let point_positions = fft_results
             .iter()
@@ -139,7 +138,7 @@ impl Spectrogram {
             .map(|(i, r)| {
                 (
                     (i as f32 * sample_interval_x) as i32,
-                    (*r * self.height as f32 / 4.0) as i32,
+                    (*r * self.height * gain / 4.0) as i32,
                 )
             })
             .collect::<Vec<(i32, i32)>>();
@@ -164,6 +163,7 @@ impl Component for Spectrogram {
         fft_results: &Vec<f32>,
         _decoded_audio: &[f32],
         _audio_history: &Vec<f32>,
+        gain: f32,
     ) {
         // background
         d.draw_rectangle(
@@ -177,21 +177,21 @@ impl Component for Spectrogram {
         // main graphic
         match self.style {
             GraphicStyle::Lines => {
-                self.render_flat_lines(d, fft_results);
+                self.render_lines(d, fft_results, gain);
             }
             GraphicStyle::Graph => {
-                self.render_flat_graph(d, fft_results);
+                self.render_graph(d, fft_results, gain);
             }
             GraphicStyle::Dots => {
-                self.render_flat_dots(d, fft_results);
+                self.render_dots(d, fft_results, gain);
             }
             GraphicStyle::DotsSingle => {
-                self.render_flat_dots_single(d, fft_results);
+                self.render_dots_single(d, fft_results, gain);
             }
         }
     }
 
-    fn update(&mut self, new_width: f32, new_height: f32, sample_count: usize) {
+    fn update(&mut self, new_width: f32, new_height: f32) {
         (self.width, self.height) = match self.position {
             GraphicPosition::Full => (new_width, new_height),
             GraphicPosition::Top | GraphicPosition::Bottom => (new_width, new_height / 2.0),
@@ -208,10 +208,5 @@ impl Component for Spectrogram {
             GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0.0, self.height),
             GraphicPosition::BottomRight => (self.width, self.height),
         };
-
-        //TODO: user defined line thickness instead of hard coding it
-        //                 ↓
-        let line_width = 0.60 * new_width as f32 / sample_count as f32;
-        unsafe { rlSetLineWidth(line_width) };
     }
 }

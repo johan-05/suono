@@ -38,6 +38,8 @@ pub struct Config {
     pub sample_count: usize,
     pub sample_interpolation_scalar: f32,
     pub timeline_length: usize,
+    pub line_width: f32,
+    pub gain: f32,
     pub graphics: Vec<GraphicConfig>,
 }
 
@@ -54,6 +56,8 @@ impl Config {
             sample_count: 200,
             sample_interpolation_scalar: 0.75,
             timeline_length: 400,
+            line_width: 1.8,
+            gain: 1.0,
             graphics: Vec::new(),
         };
     }
@@ -80,6 +84,8 @@ impl Config {
                 };
             }
             "timeline_length" => self.timeline_length = str::parse::<usize>(&value).unwrap_or(800),
+            "line_width" => self.line_width = str::parse::<f32>(&value).unwrap_or(1.8),
+            "gain" => self.gain = str::parse::<f32>(&value).unwrap_or(1.0),
             _ => println!("Could not set parameter {} to value {}", parameter, value),
         };
     }

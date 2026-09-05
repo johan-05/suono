@@ -27,7 +27,6 @@ fn pw_link_output() -> String {
         .expect("failed to pw-link -l");
 
     let link_string = String::from_utf8(pw_links.stdout).expect("corrupt string");
-    //println!("{}", link_string);
 
     return link_string;
 }

@@ -7,7 +7,6 @@ mod timeline;
 mod waveform;
 
 use config::load_config_file;
-
 use pw_connections::connect_to_channels;
 use suono::Suono;
 
@@ -22,10 +21,10 @@ TODO:
     color blending              ✓
     PW compatability            x
     optimizing+parallelizing    ✓
-    steal from cavalier         x
     timeline simplification     ✓
-    waveform simplification     x
+    waveform simplification     ✓
     spectrogram simplification  x
+    implement gain              x
 
     maybe:
     razor copy                  x
@@ -35,16 +34,19 @@ TODO:
 */
 
 fn main() {
-    //unimplemented!("amogus");
     let config = load_config_file();
     println!("{config:#?}");
+
     let mut suono = Suono::init(config);
+    let mut frame_counter = 0;
 
     while !suono.rl.window_should_close() {
         suono.update_screen_dimensions();
         suono.update_audio_data();
         suono.render();
-        connect_to_channels();
-        // panic!()
+        if frame_counter % 20 == 0 {
+            connect_to_channels();
+        }
+        frame_counter += 1;
     }
 }

@@ -1,9 +1,7 @@
 use crate::config::*;
 use crate::graphics::{Component, process_colors};
-use ffi::rlSetLineWidth;
 use itertools::Itertools;
 use raylib::prelude::*;
-use std::iter::{Enumerate, Map, StepBy};
 
 pub struct Waveform {
     //config
@@ -47,10 +45,10 @@ impl Waveform {
         });
     }
 
-    fn sample_true_pos(&self, i: usize, sample: f32, sample_interval: f32) -> Vector2 {
+    fn sample_true_pos(&self, i: usize, sample: f32, sample_interval: f32, gain: f32) -> Vector2 {
         return Vector2 {
             x: i as f32 * sample_interval + self.topleft.0,
-            y: (self.height / 2.0) + (sample * self.height) + self.topleft.1,
+            y: (self.height / 2.0) + (sample * gain * self.height) + self.topleft.1,
         }
         .clamp(
             Vector2 {
@@ -64,14 +62,14 @@ impl Waveform {
         );
     }
 
-    fn render_lines(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32]) {
-        let sample_interval = 8.0 * self.width as f32 / decoded_audio.len() as f32;
+    fn render_lines(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
+        let sample_interval = 8.0 * self.width / decoded_audio.len() as f32;
 
         decoded_audio
             .into_iter()
             .step_by(8)
             .enumerate()
-            .map(|(i, s)| (i, self.sample_true_pos(i, *s, sample_interval)))
+            .map(|(i, s)| (i, self.sample_true_pos(i, *s, sample_interval, gain)))
             .for_each(|(i, vec)| {
                 let color = process_colors(
                     &self.color_scheme,
@@ -88,7 +86,7 @@ impl Waveform {
             });
     }
 
-    fn render_graph(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32]) {
+    fn render_graph(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
         let sample_interval = 8.0 * self.width / decoded_audio.len() as f32;
 
         decoded_audio
@@ -96,7 +94,7 @@ impl Waveform {
             .step_by(8)
             .enumerate()
             .map(|(i, s)| {
-                let vec = self.sample_true_pos(i, *s, sample_interval);
+                let vec = self.sample_true_pos(i, *s, sample_interval, gain);
                 return vec;
             })
             .tuple_windows()
@@ -108,14 +106,19 @@ impl Waveform {
             });
     }
 
-    fn render_dots(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32]) {
+    fn render_dots(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
         let inv_s_count = 8.0 / decoded_audio.len() as f32;
 
         decoded_audio
             .into_iter()
             .step_by(8)
             .enumerate()
-            .map(|(i, s)| (i, self.sample_true_pos(i, *s, self.width * inv_s_count)))
+            .map(|(i, s)| {
+                (
+                    i,
+                    self.sample_true_pos(i, *s, self.width * inv_s_count, gain),
+                )
+            })
             .for_each(|(i, vec)| {
                 let color = process_colors(&self.color_scheme, i as f32 * inv_s_count);
                 d.draw_line_dashed(
@@ -131,14 +134,14 @@ impl Waveform {
             });
     }
 
-    fn render_dots_single(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32]) {
+    fn render_dots_single(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
         let sample_interval = 4.0 * self.width as f32 / decoded_audio.len() as f32;
 
         let points: Vec<Vector2> = decoded_audio
             .into_iter()
             .step_by(4)
             .enumerate()
-            .map(|(i, s)| self.sample_true_pos(i, *s, sample_interval))
+            .map(|(i, s)| self.sample_true_pos(i, *s, sample_interval, gain))
             .collect();
 
         points.into_iter().enumerate().for_each(|(i, vec)| {
@@ -159,6 +162,7 @@ impl Component for Waveform {
         _fft_results: &Vec<f32>,
         decoded_audio: &[f32],
         _audio_history: &Vec<f32>,
+        gain: f32,
     ) {
         d.draw_rectangle(
             self.topleft.0 as i32,
@@ -169,14 +173,14 @@ impl Component for Waveform {
         );
 
         match self.style {
-            GraphicStyle::Lines => self.render_lines(d, decoded_audio),
-            GraphicStyle::Graph => self.render_graph(d, decoded_audio),
-            GraphicStyle::Dots => self.render_dots(d, decoded_audio),
-            GraphicStyle::DotsSingle => self.render_dots_single(d, decoded_audio),
+            GraphicStyle::Lines => self.render_lines(d, decoded_audio, gain),
+            GraphicStyle::Graph => self.render_graph(d, decoded_audio, gain),
+            GraphicStyle::Dots => self.render_dots(d, decoded_audio, gain),
+            GraphicStyle::DotsSingle => self.render_dots_single(d, decoded_audio, gain),
         }
     }
 
-    fn update(&mut self, new_width: f32, new_height: f32, sample_count: usize) {
+    fn update(&mut self, new_width: f32, new_height: f32) {
         (self.width, self.height) = match self.position {
             GraphicPosition::Full => (new_width, new_height),
             GraphicPosition::Top | GraphicPosition::Bottom => (new_width, new_height / 2.0),
@@ -196,7 +200,7 @@ impl Component for Waveform {
 
         //TODO: user defined line thickness instead of hard coding it
         //                 ↓
-        let line_width = 0.40 * new_width as f32 / sample_count as f32;
-        unsafe { rlSetLineWidth(line_width) };
+        //let line_width = 0.40 * new_width as f32 / sample_count as f32;
+        //unsafe { rlSetLineWidth(line_width) };
     }
 }
