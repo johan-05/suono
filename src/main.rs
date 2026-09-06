@@ -16,15 +16,16 @@ use suono::Suono;
 /*
 TODO:
     Background img              ✓
-    github + README.md          ✓
+    github + README.md          x
     build.rs                    ✓
     color blending              ✓
-    PW compatability            x
+    PW compatability            ✓
     optimizing+parallelizing    ✓
     timeline simplification     ✓
     waveform simplification     ✓
-    spectrogram simplification  x
-    implement gain              x
+    spectrogram simplification  ✓
+    implement gain              ✓
+    example configs             x
 
     maybe:
     razor copy                  x

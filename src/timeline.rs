@@ -195,11 +195,20 @@ impl Timeline {
 
     fn render_dots_single(
         &mut self,
-        _d: &mut RaylibDrawHandle,
-        _audio_history: &Vec<f32>,
-        _gain: f32,
+        d: &mut RaylibDrawHandle,
+        audio_history: &Vec<f32>,
+        gain: f32,
     ) {
-        unimplemented!("UNIMPLEMENTED BRUH MOMENT");
+        let audio_history_iter = self.get_audio_history_iterator(&audio_history);
+        let sample_interval = self.width as f32 / audio_history.len() as f32;
+
+        audio_history_iter.enumerate().for_each(|(i, s)| {
+            let t = i as f32 / audio_history.len() as f32;
+            let line_color = process_colors(&self.color_scheme, t.clamp(0.0, 0.9999));
+            let line = self.calculate_vertical_line_position(i as f32, *s * gain, sample_interval);
+            d.draw_circle_v(line.start, 2.0, line_color);
+            d.draw_circle_v(line.end, 2.0, line_color);
+        });
     }
 }
 

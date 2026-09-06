@@ -62,7 +62,6 @@ fn get_sink_channels(pw_link_output: &String) -> (Vec<Channel>, Vec<Channel>) {
 }
 
 fn connect_channel_l(channel: &Channel) {
-    println!("adding channel {}", channel);
     let _output = Command::new("pw-link")
         .arg(channel)
         .arg("alsa_capture.suono:input_FL")
@@ -70,8 +69,6 @@ fn connect_channel_l(channel: &Channel) {
 }
 
 fn connect_channel_r(channel: &Channel) {
-    println!("adding channel {}", channel);
-
     let _output = Command::new("pw-link")
         .arg(channel)
         .arg("alsa_capture.suono:input_FR")

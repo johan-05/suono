@@ -88,7 +88,7 @@ impl Spectrogram {
             .enumerate()
             .map(|(i, r)| Vector2 {
                 x: i as f32 * sample_interval_x,
-                y: self.height - (*r * self.height * gain / 4.0),
+                y: self.topleft.1 + self.height - (*r * self.height * gain / 4.0),
             })
             .collect::<Vec<Vector2>>();
 
@@ -109,8 +109,8 @@ impl Spectrogram {
             .iter()
             .enumerate()
             .map(|(i, r)| Vector2 {
-                x: i as f32 * sample_interval_x,
-                y: *r * self.height * gain / 4.0,
+                x: self.topleft.0 + i as f32 * sample_interval_x,
+                y: self.topleft.1 + self.height - *r * self.height * gain / 4.0,
             })
             .collect::<Vec<Vector2>>();
 
@@ -135,23 +135,15 @@ impl Spectrogram {
         let point_positions = fft_results
             .iter()
             .enumerate()
-            .map(|(i, r)| {
-                (
-                    (i as f32 * sample_interval_x) as i32,
-                    (*r * self.height * gain / 4.0) as i32,
-                )
+            .map(|(i, r)| Vector2 {
+                x: self.topleft.0 + i as f32 * sample_interval_x,
+                y: self.topleft.1 + self.height - *r * self.height * gain / 4.0,
             })
-            .collect::<Vec<(i32, i32)>>();
+            .collect::<Vec<Vector2>>();
 
-        point_positions.into_iter().enumerate().for_each(|(i, p)| {
+        point_positions.into_iter().enumerate().for_each(|(i, v)| {
             let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
-
-            d.draw_circle(
-                self.topleft.0 as i32 + p.0,
-                self.height as i32 - (self.topleft.1 as i32 + p.1),
-                2.0,
-                color,
-            );
+            d.draw_circle_v(v, 3.0, color);
         })
     }
 }
