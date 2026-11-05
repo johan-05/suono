@@ -6,32 +6,28 @@ mod suono;
 mod timeline;
 mod waveform;
 
+use crate::pw_connections::connect_to_channels;
 use config::load_config_file;
-use pw_connections::connect_to_channels;
 use suono::Suono;
-
-#[allow(unused_variables)]
-#[allow(dead_code)]
 
 /*
 TODO:
-    Background img              ✓
     github + README.md          x
-    build.rs                    ✓
-    color blending              ✓
-    PW compatability            ✓
-    optimizing+parallelizing    ✓
-    timeline simplification     ✓
-    waveform simplification     ✓
-    spectrogram simplification  ✓
-    implement gain              ✓
     example configs             x
+    pw-robustifying             x
 
-    maybe:
+    shaders:
+    color glow                  ✓
+    util funcs                  x
+    timeline color hold         x
+
+
+    low_pri:
+    shader fft                  x
     razor copy                  x
     temperature spectrogram     x
-    color glow                  x
-    shaders                     x
+    post_processing             x
+
 */
 
 fn main() {
@@ -39,12 +35,14 @@ fn main() {
     println!("{config:#?}");
 
     let mut suono = Suono::init(config);
+
     let mut frame_counter = 0;
 
     while !suono.rl.window_should_close() {
         suono.update_screen_dimensions();
-        suono.update_audio_data();
+        suono.update_audio();
         suono.render();
+
         if frame_counter % 20 == 0 {
             connect_to_channels();
         }

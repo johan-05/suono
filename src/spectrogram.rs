@@ -1,11 +1,18 @@
-use crate::config::*;
-use crate::graphics::{Component, process_colors};
+/*use crate::config::*;
+use crate::graphics::Component;
+use ffi::rlSetShader;
 use itertools::Itertools;
+use raylib::ffi::ShaderUniformDataType::{SHADER_UNIFORM_INT, SHADER_UNIFORM_VEC2};
 use raylib::prelude::*;
+use std::ffi::CString;
+use std::os::raw::c_void;
+use std::sync::LazyLock;
 
 #[allow(dead_code)]
 pub struct Spectrogram {
     //config
+    texture: RenderTexture2D,
+    shader: ffi::Shader,
     background_color: Color,
     position: GraphicPosition,
     style: GraphicStyle,
@@ -18,7 +25,11 @@ pub struct Spectrogram {
 
 //#[allow(dead_code)]
 impl Spectrogram {
-    pub fn init(config: GraphicConfig) -> Box<dyn Component> {
+    pub fn init(
+        config: GraphicConfig,
+        rl: &mut RaylibHandle,
+        thread: &RaylibThread,
+    ) -> Box<dyn Component> {
         let (width, height) = match config.position {
             GraphicPosition::Full => (1280.0, 720.0),
             GraphicPosition::Top | GraphicPosition::Bottom => (1280.0, 360.0),
@@ -36,7 +47,50 @@ impl Spectrogram {
             GraphicPosition::BottomRight => (640.0, 360.0),
         };
 
+        let shader = unsafe {
+            match config.style {
+                GraphicStyle::Graph => rl
+                    .load_shader(
+                        thread,
+                        None,
+                        Some("/home/johannes/rust/suono/shaders/spectrogram_graph.glsl"),
+                    )
+                    .unwrap(),
+                GraphicStyle::Dots => rl
+                    .load_shader(
+                        thread,
+                        None,
+                        Some("/home/johannes/rust/suono/shaders/spectrogram_dots.glsl"),
+                    )
+                    .unwrap(),
+                _ => rl
+                    .load_shader(
+                        thread,
+                        None,
+                        Some("/home/johannes/rust/suono/shaders/spectrogram_lines.glsl"),
+                    )
+                    .unwrap(),
+            }
+        };
+
+        let should_glow = config.color_scheme.glow as i32;
+        unsafe {
+            let should_glow_loc = ffi::GetShaderLocation(shader, SHOULD_GLOW.as_ptr());
+            ffi::SetShaderValue(
+                shader,
+                should_glow_loc,
+                &should_glow as *const _ as *const c_void,
+                SHADER_UNIFORM_INT as i32,
+            );
+        }
+
+        let texture = rl
+            .load_render_texture(thread, width as u32, height as u32)
+            .expect("amogus");
+
         return Box::new(Spectrogram {
+            texture: texture,
+            shader: shader,
             background_color: config.background_color,
             position: config.position,
             style: config.style,
@@ -46,144 +100,49 @@ impl Spectrogram {
             topleft: topleft,
         });
     }
-
-    fn render_lines(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
-        let sample_interval_x = self.width / fft_results.len() as f32;
-
-        let point_positions = fft_results
-            .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                (
-                    (i as f32 * sample_interval_x),
-                    (*r * self.height * gain / 4.0),
-                )
-            })
-            .collect::<Vec<(f32, f32)>>();
-
-        point_positions
-            .into_iter()
-            .enumerate()
-            .for_each(|(i, (x, h))| {
-                let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
-                d.draw_line_v(
-                    Vector2 {
-                        x: x + self.topleft.0,
-                        y: self.height + self.topleft.1,
-                    },
-                    Vector2 {
-                        x: x + self.topleft.0,
-                        y: self.topleft.1 + self.height - h,
-                    },
-                    color,
-                );
-            });
-    }
-
-    fn render_graph(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
-        let sample_interval_x = self.width / fft_results.len() as f32;
-
-        let point_positions = fft_results
-            .iter()
-            .enumerate()
-            .map(|(i, r)| Vector2 {
-                x: i as f32 * sample_interval_x,
-                y: self.topleft.1 + self.height - (*r * self.height * gain / 4.0),
-            })
-            .collect::<Vec<Vector2>>();
-
-        point_positions
-            .iter()
-            .tuple_windows()
-            .enumerate()
-            .for_each(|(i, (p1, p2))| {
-                let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
-                d.draw_line_v(*p1, *p2, color);
-            })
-    }
-
-    fn render_dots(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
-        let sample_interval_x = self.width / fft_results.len() as f32;
-
-        let point_positions = fft_results
-            .iter()
-            .enumerate()
-            .map(|(i, r)| Vector2 {
-                x: self.topleft.0 + i as f32 * sample_interval_x,
-                y: self.topleft.1 + self.height - *r * self.height * gain / 4.0,
-            })
-            .collect::<Vec<Vector2>>();
-
-        point_positions.into_iter().enumerate().for_each(|(i, v)| {
-            let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
-            d.draw_line_dashed(
-                Vector2 {
-                    x: v.x,
-                    y: self.height + self.topleft.1,
-                },
-                v,
-                4,
-                4,
-                color,
-            )
-        });
-    }
-
-    fn render_dots_single(&mut self, d: &mut RaylibDrawHandle, fft_results: &Vec<f32>, gain: f32) {
-        let sample_interval_x = self.width / fft_results.len() as f32;
-
-        let point_positions = fft_results
-            .iter()
-            .enumerate()
-            .map(|(i, r)| Vector2 {
-                x: self.topleft.0 + i as f32 * sample_interval_x,
-                y: self.topleft.1 + self.height - *r * self.height * gain / 4.0,
-            })
-            .collect::<Vec<Vector2>>();
-
-        point_positions.into_iter().enumerate().for_each(|(i, v)| {
-            let color = process_colors(&self.color_scheme, i as f32 / fft_results.len() as f32);
-            d.draw_circle_v(v, 3.0, color);
-        })
-    }
 }
 
 impl Component for Spectrogram {
     fn render(
         &mut self,
         d: &mut RaylibDrawHandle,
-        fft_results: &Vec<f32>,
+        _fft_results: &Vec<f32>,
         _decoded_audio: &[f32],
         _audio_history: &Vec<f32>,
-        gain: f32,
+        _gain: f32,
     ) {
-        // background
-        d.draw_rectangle(
-            self.topleft.0 as i32,
-            self.topleft.1 as i32,
-            self.width as i32,
-            self.height as i32,
-            self.background_color,
-        );
+        unsafe { rlSetShader(self.shader.id, self.shader.locs) };
 
-        // main graphic
-        match self.style {
-            GraphicStyle::Lines => {
-                self.render_lines(d, fft_results, gain);
-            }
-            GraphicStyle::Graph => {
-                self.render_graph(d, fft_results, gain);
-            }
-            GraphicStyle::Dots => {
-                self.render_dots(d, fft_results, gain);
-            }
-            GraphicStyle::DotsSingle => {
-                self.render_dots_single(d, fft_results, gain);
-            }
+        let texture_dim = vec![self.width, self.height];
+
+        unsafe {
+            let texture_dim_loc = ffi::GetShaderLocation(self.shader, TEX_DIM.as_ptr());
+
+            ffi::SetShaderValue(
+                self.shader,
+                texture_dim_loc,
+                texture_dim.as_ptr() as *const c_void,
+                SHADER_UNIFORM_VEC2 as i32,
+            );
         }
+
+        d.draw_texture_ex(
+            &self.texture,
+            self.topleft,
+            0.0,
+            1.0,
+            //self.width / 1280.0,
+            Color::BLACK,
+        );
     }
 
-    fn update(&mut self, new_width: f32, new_height: f32) {
+    fn update(
+        &mut self,
+        new_width: f32,
+        new_height: f32,
+        rl: &mut RaylibHandle,
+        thread: &RaylibThread,
+    ) {
         (self.width, self.height) = match self.position {
             GraphicPosition::Full => (new_width, new_height),
             GraphicPosition::Top | GraphicPosition::Bottom => (new_width, new_height / 2.0),
@@ -200,5 +159,16 @@ impl Component for Spectrogram {
             GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0.0, self.height),
             GraphicPosition::BottomRight => (self.width, self.height),
         };
+
+        let texture = rl
+            .load_render_texture(thread, self.width as u32, self.height as u32)
+            .expect("amogus");
+        self.texture = texture;
     }
 }
+
+static SHOULD_GLOW: LazyLock<CString> =
+    LazyLock::new(|| CString::new("Should_glow").unwrap_or(CString::default()));
+static TEX_DIM: LazyLock<CString> =
+    LazyLock::new(|| CString::new("Tex_dim").unwrap_or(CString::default()));
+*/

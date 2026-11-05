@@ -1,13 +1,19 @@
-use crate::config::*;
-use crate::graphics::{Component, process_colors};
-use itertools::Itertools;
+/*use crate::config::*;
+use crate::graphics::Component;
+use ffi::rlSetShader;
+use raylib::ffi::ShaderUniformDataType::{SHADER_UNIFORM_INT, SHADER_UNIFORM_VEC2};
 use raylib::prelude::*;
+use std::boxed::Box;
+use std::ffi::CString;
+use std::os::raw::c_void;
+use std::sync::LazyLock;
 
 pub struct Waveform {
     //config
-    background_color: Color,
+    texture: RenderTexture2D,
+    shader: ffi::Shader,
     position: GraphicPosition,
-    style: GraphicStyle,
+    //style: GraphicStyle,
     color_scheme: ColorScheme,
     //state
     width: f32,
@@ -15,172 +21,47 @@ pub struct Waveform {
     topleft: (f32, f32),
 }
 
-impl Waveform {
-    pub fn init(config: GraphicConfig) -> Box<dyn Component> {
-        let (width, height) = match config.position {
-            GraphicPosition::Full => (1280.0, 720.0),
-            GraphicPosition::Top | GraphicPosition::Bottom => (1280.0, 360.0),
-            GraphicPosition::Left | GraphicPosition::Right => (640.0, 720.0),
-            _ => (640.0, 360.0),
-        };
-
-        let topleft = match config.position {
-            GraphicPosition::Full
-            | GraphicPosition::TopLeft
-            | GraphicPosition::Top
-            | GraphicPosition::Left => (0.0, 0.0),
-            GraphicPosition::Right | GraphicPosition::TopRight => (640.0, 0.0),
-            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0.0, 360.0),
-            GraphicPosition::BottomRight => (640.0, 360.0),
-        };
-
-        return Box::new(Waveform {
-            background_color: config.background_color,
-            position: config.position,
-            style: config.style,
-            color_scheme: config.color_scheme,
-            width: width,
-            height: height,
-            topleft: topleft,
-        });
-    }
-
-    fn sample_true_pos(&self, i: usize, sample: f32, sample_interval: f32, gain: f32) -> Vector2 {
-        return Vector2 {
-            x: i as f32 * sample_interval + self.topleft.0,
-            y: (self.height / 2.0) + (sample * gain * self.height) + self.topleft.1,
-        }
-        .clamp(
-            Vector2 {
-                x: 0.0,
-                y: self.topleft.1,
-            },
-            Vector2 {
-                x: f32::MAX,
-                y: self.topleft.1 + self.height,
-            },
-        );
-    }
-
-    fn render_lines(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
-        let sample_interval = 8.0 * self.width / decoded_audio.len() as f32;
-
-        decoded_audio
-            .into_iter()
-            .step_by(8)
-            .enumerate()
-            .map(|(i, s)| (i, self.sample_true_pos(i, *s, sample_interval, gain)))
-            .for_each(|(i, vec)| {
-                let color = process_colors(
-                    &self.color_scheme,
-                    8.0 * i as f32 / decoded_audio.len() as f32,
-                );
-                d.draw_line_v(
-                    Vector2 {
-                        x: vec.x,
-                        y: self.topleft.1 + self.height / 2.0,
-                    },
-                    vec,
-                    color,
-                );
-            });
-    }
-
-    fn render_graph(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
-        let sample_interval = 8.0 * self.width / decoded_audio.len() as f32;
-
-        decoded_audio
-            .iter()
-            .step_by(8)
-            .enumerate()
-            .map(|(i, s)| {
-                let vec = self.sample_true_pos(i, *s, sample_interval, gain);
-                return vec;
-            })
-            .tuple_windows()
-            .enumerate()
-            .for_each(|(i, (start_point, end_point))| {
-                let t = 8.0 * i as f32 / decoded_audio.len() as f32;
-                let color = process_colors(&self.color_scheme, t);
-                d.draw_line_v(start_point, end_point, color);
-            });
-    }
-
-    fn render_dots(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
-        let inv_s_count = 8.0 / decoded_audio.len() as f32;
-
-        decoded_audio
-            .into_iter()
-            .step_by(8)
-            .enumerate()
-            .map(|(i, s)| {
-                (
-                    i,
-                    self.sample_true_pos(i, *s, self.width * inv_s_count, gain),
-                )
-            })
-            .for_each(|(i, vec)| {
-                let color = process_colors(&self.color_scheme, i as f32 * inv_s_count);
-                d.draw_line_dashed(
-                    Vector2 {
-                        x: vec.x,
-                        y: self.topleft.1 + self.height / 2.0,
-                    },
-                    vec,
-                    2,
-                    4,
-                    color,
-                );
-            });
-    }
-
-    fn render_dots_single(&mut self, d: &mut RaylibDrawHandle, decoded_audio: &[f32], gain: f32) {
-        let sample_interval = 4.0 * self.width as f32 / decoded_audio.len() as f32;
-
-        let points: Vec<Vector2> = decoded_audio
-            .into_iter()
-            .step_by(4)
-            .enumerate()
-            .map(|(i, s)| self.sample_true_pos(i, *s, sample_interval, gain))
-            .collect();
-
-        points.into_iter().enumerate().for_each(|(i, vec)| {
-            let color = process_colors(
-                &self.color_scheme,
-                4.0 * i as f32 / decoded_audio.len() as f32,
-            );
-
-            d.draw_circle_v(vec, 1.0 * sample_interval, color);
-        });
-    }
-}
-
 impl Component for Waveform {
     fn render(
         &mut self,
         d: &mut RaylibDrawHandle,
         _fft_results: &Vec<f32>,
-        decoded_audio: &[f32],
+        _decoded_audio: &[f32],
         _audio_history: &Vec<f32>,
-        gain: f32,
+        _gain: f32,
     ) {
-        d.draw_rectangle(
-            self.topleft.0 as i32,
-            self.topleft.1 as i32,
-            self.width as i32,
-            self.height as i32,
-            self.background_color,
-        );
+        unsafe { rlSetShader(self.shader.id, self.shader.locs) };
 
-        match self.style {
-            GraphicStyle::Lines => self.render_lines(d, decoded_audio, gain),
-            GraphicStyle::Graph => self.render_graph(d, decoded_audio, gain),
-            GraphicStyle::Dots => self.render_dots(d, decoded_audio, gain),
-            GraphicStyle::DotsSingle => self.render_dots_single(d, decoded_audio, gain),
+        let texture_dim = vec![self.width, self.height];
+
+        unsafe {
+            let texture_dim_loc = ffi::GetShaderLocation(self.shader, TEX_DIM.as_ptr());
+
+            ffi::SetShaderValue(
+                self.shader,
+                texture_dim_loc,
+                texture_dim.as_ptr() as *const c_void,
+                SHADER_UNIFORM_VEC2 as i32,
+            );
         }
+
+        d.draw_texture_ex(
+            &self.texture,
+            self.topleft,
+            0.0,
+            1.0,
+            //self.width / 1280.0,
+            Color::BLACK,
+        );
     }
 
-    fn update(&mut self, new_width: f32, new_height: f32) {
+    fn update(
+        &mut self,
+        new_width: f32,
+        new_height: f32,
+        rl: &mut RaylibHandle,
+        thread: &RaylibThread,
+    ) {
         (self.width, self.height) = match self.position {
             GraphicPosition::Full => (new_width, new_height),
             GraphicPosition::Top | GraphicPosition::Bottom => (new_width, new_height / 2.0),
@@ -198,9 +79,92 @@ impl Component for Waveform {
             GraphicPosition::BottomRight => (self.width, self.height),
         };
 
-        //TODO: user defined line thickness instead of hard coding it
-        //                 ↓
-        //let line_width = 0.40 * new_width as f32 / sample_count as f32;
-        //unsafe { rlSetLineWidth(line_width) };
+        let texture = rl
+            .load_render_texture(thread, self.width as u32, self.height as u32)
+            .expect("amogus");
+        self.texture = texture;
     }
 }
+
+impl Waveform {
+    pub fn init(
+        config: GraphicConfig,
+        rl: &mut RaylibHandle,
+        thread: &RaylibThread,
+    ) -> Box<dyn Component> {
+        let (width, height) = match config.position {
+            GraphicPosition::Full => (1280.0, 720.0),
+            GraphicPosition::Top | GraphicPosition::Bottom => (1280.0, 360.0),
+            GraphicPosition::Left | GraphicPosition::Right => (640.0, 720.0),
+            _ => (640.0, 360.0),
+        };
+
+        let topleft = match config.position {
+            GraphicPosition::Full
+            | GraphicPosition::TopLeft
+            | GraphicPosition::Top
+            | GraphicPosition::Left => (0.0, 0.0),
+            GraphicPosition::Right | GraphicPosition::TopRight => (640.0, 0.0),
+            GraphicPosition::BottomLeft | GraphicPosition::Bottom => (0.0, 360.0),
+            GraphicPosition::BottomRight => (640.0, 360.0),
+        };
+
+        let shader = unsafe {
+            match config.style {
+                GraphicStyle::Graph => rl
+                    .load_shader(
+                        thread,
+                        None,
+                        Some("/home/johannes/rust/suono/shaders/waveform_graph.glsl"),
+                    )
+                    .unwrap(),
+                GraphicStyle::Dots => rl
+                    .load_shader(
+                        thread,
+                        None,
+                        Some("/home/johannes/rust/suono/shaders/waveform_dots.glsl"),
+                    )
+                    .unwrap(),
+                _ => rl
+                    .load_shader(
+                        thread,
+                        None,
+                        Some("/home/johannes/rust/suono/shaders/waveform_lines.glsl"),
+                    )
+                    .unwrap(),
+            }
+        };
+
+        let should_glow = config.color_scheme.glow as i32;
+        unsafe {
+            let should_glow_loc = ffi::GetShaderLocation(shader, SHOULD_GLOW.as_ptr());
+            ffi::SetShaderValue(
+                shader,
+                should_glow_loc,
+                &should_glow as *const _ as *const c_void,
+                SHADER_UNIFORM_INT as i32,
+            );
+        }
+
+        let texture = rl
+            .load_render_texture(thread, width as u32, height as u32)
+            .expect("amogus");
+
+        return Box::new(Waveform {
+            texture: texture,
+            shader: shader,
+            position: config.position,
+            //style: config.style,
+            color_scheme: config.color_scheme,
+            width: width,
+            height: height,
+            topleft: topleft,
+        });
+    }
+}
+
+static SHOULD_GLOW: LazyLock<CString> =
+    LazyLock::new(|| CString::new("Should_glow").unwrap_or(CString::default()));
+static TEX_DIM: LazyLock<CString> =
+    LazyLock::new(|| CString::new("Tex_dim").unwrap_or(CString::default()));
+*/

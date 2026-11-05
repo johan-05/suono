@@ -38,8 +38,8 @@ pub struct Config {
     pub sample_count: usize,
     pub sample_interpolation_scalar: f32,
     pub timeline_length: usize,
-    pub line_width: f32,
     pub gain: f32,
+    pub colors: Vec<Vector4>,
     pub graphics: Vec<GraphicConfig>,
 }
 
@@ -56,15 +56,15 @@ impl Config {
             sample_count: 200,
             sample_interpolation_scalar: 0.75,
             timeline_length: 400,
-            line_width: 1.8,
             gain: 1.0,
+            colors: Vec::new(),
             graphics: Vec::new(),
         };
     }
 
     fn modify_parameter(&mut self, parameter: &str, value: &str) {
         let parameter = parameter.trim().to_lowercase();
-        let value = value.trim().to_lowercase();
+        let value = value.trim();
 
         match parameter.as_str() {
             "sample_count" => self.sample_count = str::parse::<usize>(&value).unwrap_or(200),
@@ -84,7 +84,6 @@ impl Config {
                 };
             }
             "timeline_length" => self.timeline_length = str::parse::<usize>(&value).unwrap_or(800),
-            "line_width" => self.line_width = str::parse::<f32>(&value).unwrap_or(1.8),
             "gain" => self.gain = str::parse::<f32>(&value).unwrap_or(1.0),
             _ => println!("Could not set parameter {} to value {}", parameter, value),
         };
@@ -97,11 +96,12 @@ pub struct GraphicConfig {
     pub background_color: Color,
     pub position: GraphicPosition,
     pub style: GraphicStyle,
+    pub line_width: f32,
     pub color_scheme: ColorScheme,
 }
 
 impl GraphicConfig {
-    fn default() -> Self {
+    fn default() -> GraphicConfig {
         return GraphicConfig {
             graphics_type: GraphicType::Timeline,
             background_color: Color {
@@ -112,34 +112,17 @@ impl GraphicConfig {
             },
             position: GraphicPosition::Full,
             style: GraphicStyle::Graph,
+            line_width: 2.0,
             color_scheme: ColorScheme {
-                colors: vec![
-                    Color {
-                        r: 204,
-                        g: 47,
-                        b: 0,
-                        a: 255,
-                    },
-                    Color {
-                        r: 70,
-                        g: 90,
-                        b: 178,
-                        a: 255,
-                    },
-                    Color {
-                        r: 0,
-                        g: 118,
-                        b: 104,
-                        a: 255,
-                    },
-                ],
+                color_idx: 0,
+                color_count: 0,
                 blend: true,
                 glow: false,
             },
         };
     }
 
-    fn modify_parameter(&mut self, parameter: &str, value: &str) {
+    fn modify_parameter(&mut self, parameter: &str, value: &str) -> Option<Vec<Vector4>> {
         let parameter = parameter.trim().to_lowercase();
         let value = value.trim();
 
@@ -171,6 +154,7 @@ impl GraphicConfig {
                     "graph" => GraphicStyle::Graph,
                     "dots" => GraphicStyle::Dots,
                     "dots_single" => GraphicStyle::DotsSingle,
+                    "full" => GraphicStyle::Full,
                     _ => GraphicStyle::Lines,
                 }
             }
@@ -182,15 +166,23 @@ impl GraphicConfig {
                     _ => GraphicType::Timeline,
                 }
             }
+            "line_width" => self.line_width = str::parse::<f32>(&value).unwrap_or(1.8),
+
             "color_scheme" => {
                 let values_trimmed = value.trim_matches(&SQUARE_BRACKETS);
 
-                let colors: Vec<Color> = values_trimmed
+                let colors: Vec<Vector4> = values_trimmed
                     .split(", ")
-                    .map(|color| Color::from_hex(color).unwrap_or(Color::TURQUOISE))
+                    .map(|color| {
+                        Color::from_hex(color)
+                            .unwrap_or(Color::TURQUOISE)
+                            .color_normalize()
+                    })
                     .collect();
 
-                self.color_scheme.colors = colors;
+                self.color_scheme.color_idx = 0;
+                self.color_scheme.color_count = colors.len() as i32;
+                return Some(colors);
             }
             "color_blend" => {
                 self.color_scheme.blend = match value {
@@ -208,6 +200,7 @@ impl GraphicConfig {
             }
             _ => println!("Could not set parameter {} to value {}", parameter, value),
         }
+        return None;
     }
 }
 
@@ -237,11 +230,13 @@ pub enum GraphicStyle {
     Graph,
     Dots,
     DotsSingle,
+    Full,
 }
 
 #[derive(Clone, Debug)]
 pub struct ColorScheme {
-    pub colors: Vec<Color>,
+    pub color_idx: i32,
+    pub color_count: i32,
     pub blend: bool,
     pub glow: bool,
 }
@@ -266,7 +261,13 @@ fn parse_config_file(file: String) -> Config {
 
             match l.split_once(" = ") {
                 Some((parameter, value)) => match current_graphic {
-                    Some(ref mut current) => current.modify_parameter(parameter, value),
+                    Some(ref mut current) => {
+                        let color_opt = current.modify_parameter(parameter, value);
+                        if let Some(color_vec) = color_opt {
+                            current.color_scheme.color_idx = session_config.colors.len() as i32;
+                            session_config.colors.extend(color_vec);
+                        }
+                    }
                     None => session_config.modify_parameter(parameter, value),
                 },
                 None => (),
