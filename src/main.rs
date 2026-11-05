@@ -1,10 +1,7 @@
 mod config;
 mod graphics;
 mod pw_connections;
-mod spectrogram;
 mod suono;
-mod timeline;
-mod waveform;
 
 use crate::pw_connections::connect_to_channels;
 use config::load_config_file;
@@ -43,7 +40,7 @@ fn main() {
         suono.update_audio();
         suono.render();
 
-        if frame_counter % 20 == 0 {
+        if frame_counter % 30 == 0 {
             connect_to_channels();
         }
         frame_counter += 1;

@@ -6,26 +6,27 @@ use ffi::Rectangle;
 use ffi::SetConfigFlags;
 use ffi::rlLoadShaderBuffer;
 
-//use raylib::ffi::Rectangle;
 use raylib::ffi::{RL_STATIC_DRAW, RL_STREAM_DRAW};
 use raylib::prelude::*;
-use std::os::raw::c_void;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{DeviceId, Stream, StreamConfig};
+use cpal::{DeviceId, StreamConfig};
 
 use std::f32::consts::{E, PI};
+use std::os::raw::c_uint;
+use std::os::raw::c_void;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-const ONE_HUNDRED_MS: u64 = 100_000_000;
+const ONE_HUNDRED_MS: u64 = 100_000_000; //the number of nanoseconds that equals 100ms
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+const AUDIO_BUFFER_ID: c_uint = 0;
+const FFT_BUFFER_ID: c_uint = 1;
+const COLOR_BUFFER_ID: c_uint = 2;
+const AUDIO_HISTORY_BUFFER_ID: c_uint = 3;
 
 pub struct Suono {
     //config
-    pub sample_count: u32,
     pub sample_interpolation_scalar: f32,
     pub background_color: Color,
     pub background_image: Option<Texture2D>,
@@ -45,15 +46,16 @@ pub struct Suono {
     pub rl: RaylibHandle,
     pub thread: RaylibThread,
     //pipewire stuff
-    pub audio_stream: Stream,
     audio_data_arc: Arc<Mutex<AudioData>>,
 }
 
-#[allow(dead_code)]
 impl Suono {
     pub fn init(config: Config) -> Self {
         let (mut rl, thread) = raylib::init().size(1279, 720).title("Suono").build();
+        let window_width = rl.get_screen_width() as f32;
+        let window_height = rl.get_screen_height() as f32;
         rl.set_target_fps(60);
+        unsafe { SetConfigFlags(FLAG_WINDOW_RESIZABLE as u32) };
 
         let start_time = Instant::now();
         let audio_data_arc = Arc::new(Mutex::new(AudioData {
@@ -61,33 +63,25 @@ impl Suono {
             timestamp: 0,
             program_start: start_time,
         }));
-        let audio_stream = pipewire_init(audio_data_arc.clone());
-        audio_stream.play().expect("could not play stream");
 
-        let window_width = rl.get_screen_width() as f32;
-        let window_height = rl.get_screen_height() as f32;
+        pipewire_init(audio_data_arc.clone());
 
-        unsafe { SetConfigFlags(FLAG_WINDOW_RESIZABLE as u32) };
-
-        let mut background_image: Option<Texture2D> = None;
-        if let Some(background_image_file) = &config.background_image {
-            background_image = rl
-                .load_texture_from_image(&thread, background_image_file)
-                .ok();
-        }
+        let background_image = config
+            .background_image
+            .as_ref()
+            .map(|img| rl.load_texture_from_image(&thread, &img).ok())
+            .flatten();
 
         let graphic_elements = Suono::create_graphic_elements(&config, &mut rl, &thread);
-
         let target_frequencies = create_target_frequencies(config.sample_count);
 
         let audio_history = vec![0.0; config.timeline_length];
+        let fft_results = vec![0.0; config.sample_count];
         let audio_data = AudioData {
             buffer: [0.0; 2048],
             timestamp: 0,
             program_start: start_time,
         };
-
-        let fft_results = vec![0.0; config.sample_count];
 
         let (audio_buffer, fft_buffer, audio_history_buffer) = Suono::attach_gpu_buffers(
             &audio_data.buffer,
@@ -97,7 +91,6 @@ impl Suono {
         );
 
         return Suono {
-            sample_count: config.sample_count as u32,
             sample_interpolation_scalar: config.sample_interpolation_scalar,
             background_color: config.background_color,
             background_image: background_image,
@@ -114,7 +107,6 @@ impl Suono {
             fft_results,
             rl,
             thread,
-            audio_stream,
             audio_data_arc,
         };
     }
@@ -124,7 +116,6 @@ impl Suono {
         let new_height = self.rl.get_screen_height() as f32;
 
         if new_width != self.window_width || new_height != self.window_height {
-            println!("changed height {new_height}, width {new_width}");
             self.window_width = new_width;
             self.window_height = new_height;
             self.graphic_elements
@@ -134,29 +125,29 @@ impl Suono {
     }
 
     pub fn update_audio(&mut self) {
+        self.update_audio_buffer();
+
         let res = fft_custom(self.audio_data.buffer.as_slice(), &self.target_frequencies);
         for (i, f) in self.fft_results.iter_mut().enumerate() {
             *f = res[i] + *f * self.sample_interpolation_scalar;
         }
 
-        self.update_audio_buffer();
-
         unsafe {
-            ffi::rlBindShaderBuffer(self.audio_buffer, 0);
+            ffi::rlBindShaderBuffer(self.audio_buffer, AUDIO_BUFFER_ID);
             ffi::rlUpdateShaderBuffer(
                 self.audio_buffer,
                 self.audio_data.buffer.as_ptr() as *const c_void,
                 self.audio_data.buffer.len() as u32 * size_of::<f32>() as u32,
                 0,
             );
-            ffi::rlBindShaderBuffer(self.fft_buffer, 1);
+            ffi::rlBindShaderBuffer(self.fft_buffer, FFT_BUFFER_ID);
             ffi::rlUpdateShaderBuffer(
                 self.fft_buffer,
                 self.fft_results.as_ptr() as *const c_void,
                 self.fft_results.len() as u32 * size_of::<f32>() as u32,
                 0,
             );
-            ffi::rlBindShaderBuffer(self.audio_history_buffer, 3);
+            ffi::rlBindShaderBuffer(self.audio_history_buffer, AUDIO_HISTORY_BUFFER_ID);
             ffi::rlUpdateShaderBuffer(
                 self.audio_history_buffer,
                 self.audio_history.as_ptr() as *const c_void,
@@ -258,7 +249,7 @@ impl Suono {
             )
         };
         unsafe {
-            ffi::rlBindShaderBuffer(color_buffer, 2);
+            ffi::rlBindShaderBuffer(color_buffer, COLOR_BUFFER_ID);
             ffi::rlUpdateShaderBuffer(
                 color_buffer,
                 colors.as_ptr() as *const c_void,
@@ -270,7 +261,7 @@ impl Suono {
     }
 
     pub fn render(&mut self) {
-        let fps = "FPS: ".to_owned() + &self.rl.get_fps().to_string().as_str();
+        let fps_string = "FPS: ".to_owned() + &self.rl.get_fps().to_string().as_str();
         let mut d = self.rl.begin_drawing(&self.thread);
         d.clear_background(self.background_color);
 
@@ -286,10 +277,10 @@ impl Suono {
                 Rectangle {
                     x: 0.0,
                     y: 0.0,
-                    width: self.window_width as f32,
-                    height: self.window_height as f32,
+                    width: self.window_width,
+                    height: self.window_height,
                 },
-                Vector2 { x: 0.0, y: 0.0 },
+                Vector2::ZERO,
                 0.0,
                 Color::WHITE,
             )
@@ -302,20 +293,11 @@ impl Suono {
             .unwrap_or(0) as i32;
 
         for graphic in &mut self.graphic_elements {
-            graphic.render(
-                &mut d,
-                &self.fft_results,
-                &self.audio_data.buffer.as_slice(),
-                &self.audio_history,
-                self.gain,
-                timeline_offset,
-            );
+            graphic.render(&mut d, self.gain, timeline_offset);
         }
+        unsafe { ffi::EndShaderMode() };
 
-        unsafe {
-            ffi::EndShaderMode();
-        };
-        d.draw_text(&fps, 10, 10, 16, Color::WHITE);
+        d.draw_text(&fps_string, 10, 10, 16, Color::WHITE);
     }
 }
 
@@ -325,31 +307,29 @@ pub struct AudioData {
     program_start: Instant,
 }
 
-fn pipewire_init(audio_data_arc: Arc<Mutex<AudioData>>) -> Stream {
+fn pipewire_init(audio_data_arc: Arc<Mutex<AudioData>>) {
     let host = cpal::default_host();
     let device = host
         .device_by_id(&DeviceId::new(host.id(), "pipewire"))
         .expect("pipewire not found");
 
-    let stream = create_audio_stream(device, audio_data_arc);
+    create_audio_stream(device, audio_data_arc);
 
     let _com = std::process::Command::new("bash")
         .arg("-c")
         .arg("~/rust/suono/src/pw_redirect_sources.sh")
         .output()
         .unwrap();
-
-    return stream;
 }
 
-fn create_audio_stream(device: cpal::Device, audio_data_arc: Arc<Mutex<AudioData>>) -> Stream {
+fn create_audio_stream(device: cpal::Device, audio_data_arc: Arc<Mutex<AudioData>>) {
     let stream_config = StreamConfig {
         channels: 2,
         sample_rate: 44100,
         buffer_size: cpal::BufferSize::Fixed(1124),
     };
 
-    device
+    let stream = device
         .build_input_stream(
             stream_config,
             move |source_data: &[f32], s| {
@@ -368,7 +348,10 @@ fn create_audio_stream(device: cpal::Device, audio_data_arc: Arc<Mutex<AudioData
             move |error| println!("Audio stream error {}", error),
             Some(std::time::Duration::from_secs(1)),
         )
-        .expect("failed to make de strim")
+        .expect("failed to make de strim");
+
+    stream.play().expect("unable to play stream");
+    Box::leak(Box::new(stream));
 }
 
 // theory: https://en.wikipedia.org/wiki/Fast_Fourier_transform#FFT_algorithms_specialized_for_real_or_symmetric_data

@@ -8,27 +8,6 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 use std::sync::LazyLock;
 
-#[allow(unused_variables)]
-#[allow(dead_code)]
-
-pub trait Component {
-    fn render(
-        &mut self,
-        d: &mut RaylibDrawHandle,
-        fft_rasults: &Vec<f32>,
-        decoded_audio: &[f32],
-        audio_history: &Vec<f32>,
-        gain: f32,
-    );
-    fn update(
-        &mut self,
-        new_width: f32,
-        new_height: f32,
-        rl: &mut RaylibHandle,
-        thread: &RaylibThread,
-    );
-}
-
 pub struct Graphic {
     //config
     texture: RenderTexture2D,
@@ -38,8 +17,6 @@ pub struct Graphic {
     width: f32,
     height: f32,
     topleft: (f32, f32),
-    //color_idx: usize,
-    //color_count: usize,
 }
 
 impl Graphic {
@@ -90,15 +67,7 @@ impl Graphic {
         };
     }
 
-    pub fn render(
-        &mut self,
-        d: &mut RaylibDrawHandle,
-        _fft_results: &Vec<f32>,
-        _decoded_audio: &[f32],
-        _audio_history: &Vec<f32>,
-        _gain: f32,
-        timeline_offset: i32,
-    ) {
+    pub fn render(&mut self, d: &mut RaylibDrawHandle, _gain: f32, timeline_offset: i32) {
         unsafe { rlSetShader(self.shader.id, self.shader.locs) };
 
         let texture_dim = vec![self.width, self.height];
