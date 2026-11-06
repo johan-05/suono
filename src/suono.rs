@@ -1,3 +1,4 @@
+use crate::circular::Circular2D;
 use crate::config::*;
 use crate::graphics::Graphic;
 
@@ -39,6 +40,7 @@ pub struct Suono {
     pub audio_data: AudioData,
     pub audio_history: Vec<f32>,
     fft_results: Vec<f32>,
+    fft_history: Circular2D<f32>,
     audio_buffer: u32,
     fft_buffer: u32,
     audio_history_buffer: u32,
@@ -77,6 +79,17 @@ impl Suono {
 
         let audio_history = vec![0.0; config.timeline_length];
         let fft_results = vec![0.0; config.sample_count];
+        let mut fft_history = Circular2D::with_dimentions((3, 2));
+        println!("{:?}", fft_history);
+
+        fft_history.push(&[1., 2.]).unwrap();
+        fft_history.push(&[3., 4.]).unwrap();
+        fft_history.push(&[5., 6.]).unwrap();
+        fft_history.push(&[7., 8.]).unwrap();
+        fft_history.push(&[9., 10.]).unwrap();
+
+        println!("{:?}, {:?}", fft_history, &fft_history[1]);
+
         let audio_data = AudioData {
             buffer: [0.0; 2048],
             timestamp: 0,
@@ -93,11 +106,12 @@ impl Suono {
         return Suono {
             sample_interpolation_scalar: config.sample_interpolation_scalar,
             background_color: config.background_color,
-            background_image: background_image,
             gain: config.gain,
-            audio_buffer: audio_buffer,
-            fft_buffer: fft_buffer,
-            audio_history_buffer: audio_history_buffer,
+            background_image,
+            audio_buffer,
+            fft_buffer,
+            fft_history,
+            audio_history_buffer,
             graphic_elements,
             window_width,
             window_height,

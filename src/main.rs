@@ -1,4 +1,6 @@
+mod circular;
 mod config;
+mod errors;
 mod graphics;
 mod pw_connections;
 mod suono;
