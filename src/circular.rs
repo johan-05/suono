@@ -1,18 +1,19 @@
 use crate::errors::WrongSizeOfSlice;
 
 use std::error::Error;
+use std::fmt::Debug;
 use std::ops::Index;
 
 #[derive(Debug)]
 pub struct Circular2D<T> {
-    buffer: Vec<T>,
-    offset: usize,
+    pub buffer: Vec<T>,
+    pub offset: usize,
     dimentions: (usize, usize),
 }
 
 impl<T> Circular2D<T>
 where
-    T: Copy + Default,
+    T: Copy + Default + Debug,
 {
     pub fn with_dimentions(dim: (usize, usize)) -> Circular2D<T> {
         return Circular2D {
@@ -37,6 +38,10 @@ where
             self.offset = 0;
         }
         return Ok(());
+    }
+
+    pub fn len(&self) -> usize {
+        return self.dimentions.0 * self.dimentions.1;
     }
 }
 

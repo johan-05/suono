@@ -1,3 +1,4 @@
+use crate::color_palette::*;
 use dirs::config_dir;
 use raylib::{ffi::CSSPalette, prelude::*};
 use std::fs;
@@ -163,22 +164,32 @@ impl GraphicConfig {
                     "timeline" => GraphicType::Timeline,
                     "spectrogram" => GraphicType::Spectrogram,
                     "waveform" => GraphicType::Waveform,
+                    "temperature" => GraphicType::Temperature,
                     _ => GraphicType::Timeline,
                 }
             }
             "line_width" => self.line_width = str::parse::<f32>(&value).unwrap_or(1.8),
 
             "color_scheme" => {
-                let values_trimmed = value.trim_matches(&SQUARE_BRACKETS);
-
-                let colors: Vec<Vector4> = values_trimmed
-                    .split(", ")
-                    .map(|color| {
-                        Color::from_hex(color)
-                            .unwrap_or(Color::TURQUOISE)
-                            .color_normalize()
-                    })
-                    .collect();
+                let colors = match value {
+                    "viridis" => VIRIDIS.to_vec(),
+                    "inferno" => INFERNO.to_vec(),
+                    "mako" => MAKO.to_vec(),
+                    "aurora" => AURORA.to_vec(),
+                    "buda" => BUDA.to_vec(),
+                    "burgundy" => BURGUNDY.to_vec(),
+                    _ => {
+                        let values_trimmed = value.trim_matches(&SQUARE_BRACKETS);
+                        values_trimmed
+                            .split(", ")
+                            .map(|color| {
+                                Color::from_hex(color)
+                                    .unwrap_or(Color::TURQUOISE)
+                                    .color_normalize()
+                            })
+                            .collect()
+                    }
+                };
 
                 self.color_scheme.color_idx = 0;
                 self.color_scheme.color_count = colors.len() as i32;
@@ -209,6 +220,7 @@ pub enum GraphicType {
     Spectrogram,
     Waveform,
     Timeline,
+    Temperature,
 }
 
 #[derive(Clone, Copy, Debug)]

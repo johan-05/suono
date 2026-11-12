@@ -67,7 +67,13 @@ impl Graphic {
         };
     }
 
-    pub fn render(&mut self, d: &mut RaylibDrawHandle, _gain: f32, timeline_offset: i32) {
+    pub fn render(
+        &mut self,
+        d: &mut RaylibDrawHandle,
+        _gain: f32,
+        timeline_offset: i32,
+        fft_history_offset: i32,
+    ) {
         unsafe { rlSetShader(self.shader.id, self.shader.locs) };
 
         let texture_dim = vec![self.width, self.height];
@@ -85,6 +91,14 @@ impl Graphic {
                 self.shader,
                 timeline_offset_loc,
                 &timeline_offset as *const _ as *const c_void,
+                SHADER_UNIFORM_INT as i32,
+            );
+            let fft_offset_loc = ffi::GetShaderLocation(self.shader, FFT_OFFSET.as_ptr());
+            //println!("{fft_offset_loc}");
+            ffi::SetShaderValue(
+                self.shader,
+                fft_offset_loc,
+                &fft_history_offset as *const _ as *const c_void,
                 SHADER_UNIFORM_INT as i32,
             );
         }
@@ -162,8 +176,9 @@ fn load_shader(
         (GraphicType::Timeline, GraphicStyle::Full) => {
             Some("/home/johannes/rust/suono/shaders/timeline_full.glsl")
         }
+        (GraphicType::Temperature, _) => Some("/home/johannes/rust/suono/shaders/temperature.glsl"),
 
-        _ => Some("/home/johannes/rust/suono/shaders/spectrogram_lines.glsl"),
+        _ => Some("/home/johannes/rust/suono/shaders/spectrogram_full.glsl"),
     };
     unsafe { rl.load_shader(thread, None, fs_path).unwrap() }
 }
@@ -259,3 +274,5 @@ static GAIN: LazyLock<CString> =
     LazyLock::new(|| CString::new("gain").unwrap_or(CString::default()));
 static TIMELINE_OFFSET: LazyLock<CString> =
     LazyLock::new(|| CString::new("timeline_offset").unwrap_or(CString::default()));
+static FFT_OFFSET: LazyLock<CString> =
+    LazyLock::new(|| CString::new("fft_offset").unwrap_or(CString::default()));

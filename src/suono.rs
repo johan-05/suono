@@ -25,6 +25,7 @@ const AUDIO_BUFFER_ID: c_uint = 0;
 const FFT_BUFFER_ID: c_uint = 1;
 const COLOR_BUFFER_ID: c_uint = 2;
 const AUDIO_HISTORY_BUFFER_ID: c_uint = 3;
+const FFT_HISTORY_ID: c_uint = 4;
 
 pub struct Suono {
     //config
@@ -44,6 +45,7 @@ pub struct Suono {
     audio_buffer: u32,
     fft_buffer: u32,
     audio_history_buffer: u32,
+    fft_history_buffer: u32,
     //raylib stuff
     pub rl: RaylibHandle,
     pub thread: RaylibThread,
@@ -79,16 +81,8 @@ impl Suono {
 
         let audio_history = vec![0.0; config.timeline_length];
         let fft_results = vec![0.0; config.sample_count];
-        let mut fft_history = Circular2D::with_dimentions((3, 2));
-        println!("{:?}", fft_history);
-
-        fft_history.push(&[1., 2.]).unwrap();
-        fft_history.push(&[3., 4.]).unwrap();
-        fft_history.push(&[5., 6.]).unwrap();
-        fft_history.push(&[7., 8.]).unwrap();
-        fft_history.push(&[9., 10.]).unwrap();
-
-        println!("{:?}, {:?}", fft_history, &fft_history[1]);
+        let fft_history =
+            Circular2D::with_dimentions((config.timeline_length, config.sample_count / 2));
 
         let audio_data = AudioData {
             buffer: [0.0; 2048],
@@ -96,12 +90,14 @@ impl Suono {
             program_start: start_time,
         };
 
-        let (audio_buffer, fft_buffer, audio_history_buffer) = Suono::attach_gpu_buffers(
-            &audio_data.buffer,
-            &fft_results,
-            &audio_history,
-            config.colors,
-        );
+        let (audio_buffer, fft_buffer, audio_history_buffer, fft_history_buffer) =
+            Suono::attach_gpu_buffers(
+                &audio_data.buffer,
+                &fft_results,
+                &audio_history,
+                &fft_history,
+                config.colors,
+            );
 
         return Suono {
             sample_interpolation_scalar: config.sample_interpolation_scalar,
@@ -119,6 +115,7 @@ impl Suono {
             audio_data,
             audio_history,
             fft_results,
+            fft_history_buffer,
             rl,
             thread,
             audio_data_arc,
@@ -140,11 +137,16 @@ impl Suono {
 
     pub fn update_audio(&mut self) {
         self.update_audio_buffer();
+        let mut fft_every_other = Vec::<f32>::with_capacity(self.fft_results.len() / 2);
 
         let res = fft_custom(self.audio_data.buffer.as_slice(), &self.target_frequencies);
         for (i, f) in self.fft_results.iter_mut().enumerate() {
             *f = res[i] + *f * self.sample_interpolation_scalar;
+            if i % 2 == 0 {
+                fft_every_other.push(*f);
+            }
         }
+        self.fft_history.push(&fft_every_other).unwrap();
 
         unsafe {
             ffi::rlBindShaderBuffer(self.audio_buffer, AUDIO_BUFFER_ID);
@@ -166,6 +168,13 @@ impl Suono {
                 self.audio_history_buffer,
                 self.audio_history.as_ptr() as *const c_void,
                 self.audio_history.len() as u32 * size_of::<f32>() as u32,
+                0,
+            );
+            ffi::rlBindShaderBuffer(self.fft_history_buffer, FFT_HISTORY_ID);
+            ffi::rlUpdateShaderBuffer(
+                self.fft_history_buffer,
+                self.fft_history.buffer.as_ptr() as *const c_void,
+                self.fft_history.len() as u32 * size_of::<f32>() as u32,
                 0,
             );
         }
@@ -232,8 +241,9 @@ impl Suono {
         audio_data: &[f32; 2048],
         fft_results: &Vec<f32>,
         audio_history: &Vec<f32>,
+        fft_history: &Circular2D<f32>,
         colors: Vec<Vector4>,
-    ) -> (u32, u32, u32) {
+    ) -> (u32, u32, u32, u32) {
         let audio_buffer = unsafe {
             rlLoadShaderBuffer(
                 audio_data.len() as u32 * size_of::<f32>() as u32,
@@ -262,6 +272,13 @@ impl Suono {
                 RL_STATIC_DRAW as i32,
             )
         };
+        let fft_history_buffer = unsafe {
+            rlLoadShaderBuffer(
+                fft_history.len() as u32 * size_of::<f32>() as u32,
+                0 as *const c_void,
+                RL_STREAM_DRAW as i32,
+            )
+        };
         unsafe {
             ffi::rlBindShaderBuffer(color_buffer, COLOR_BUFFER_ID);
             ffi::rlUpdateShaderBuffer(
@@ -271,7 +288,12 @@ impl Suono {
                 0,
             );
         }
-        return (audio_buffer, fft_buffer, audio_history_buffer);
+        return (
+            audio_buffer,
+            fft_buffer,
+            audio_history_buffer,
+            fft_history_buffer,
+        );
     }
 
     pub fn render(&mut self) {
@@ -307,7 +329,12 @@ impl Suono {
             .unwrap_or(0) as i32;
 
         for graphic in &mut self.graphic_elements {
-            graphic.render(&mut d, self.gain, timeline_offset);
+            graphic.render(
+                &mut d,
+                self.gain,
+                timeline_offset,
+                self.fft_history.offset as i32,
+            );
         }
         unsafe { ffi::EndShaderMode() };
 

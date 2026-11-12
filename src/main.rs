@@ -1,4 +1,5 @@
 mod circular;
+mod color_palette;
 mod config;
 mod errors;
 mod graphics;
@@ -32,6 +33,8 @@ TODO:
 fn main() {
     let config = load_config_file();
     println!("{config:#?}");
+
+    println!("{:?}", config.colors);
 
     let mut suono = Suono::init(config);
 
